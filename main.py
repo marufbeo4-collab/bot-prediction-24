@@ -13,7 +13,7 @@ from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandl
 
 # ================= CONFIGURATION =================
 BOT_TOKEN = "8183778698:AAGiOJuiN4ZRT7iEvIQLM3JaHc_tu1EFSWY"  # আপনার টোকেন এখানে দিন
-CHANNEL_USERNAME = "@big_maruf_official0" # আপনার চ্যানেলের ইউজারনেম
+CHANNEL_USERNAME = "@dk_mentor_maruf_official" # আপনার চ্যানেলের ইউজারনেম
 ADMIN_ID = 123456789  # আপনার টেলিগ্রাম আইডি (অপশনাল)
 
 # API ENDPOINTS
