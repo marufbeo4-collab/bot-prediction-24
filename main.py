@@ -14,7 +14,7 @@ from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandl
 
 # ================= CONFIGURATION =================
 BOT_TOKEN = "8183778698:AAGiOJuiN4ZRT7iEvIQLM3JaHc_tu1EFSWY"  # <--- আপনার টোকেন বসান
-TARGET_CHANNEL = "@Maruf_King_Pro_Predict_bot"  # আপনার চ্যানেলের ইউজারনেম
+TARGET_CHANNEL = "@dk_mentor_maruf_official"  # আপনার চ্যানেলের ইউজারনেম
 ADMIN_ID = 123456789  # (অপশনাল)
 
 # ================= API LINKS (আপনার দেওয়া লিঙ্ক) =================
