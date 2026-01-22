@@ -14,11 +14,10 @@ from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandl
 
 # ================= CONFIGURATION =================
 BOT_TOKEN = "8183778698:AAGiOJuiN4ZRT7iEvIQLM3JaHc_tu1EFSWY"  # <--- আপনার টোকেন বসান
-# চ্যানেল ইউজারনেম (অবশ্যই @ সহ দিবেন) অথবা চ্যানেল ID (-100...)
-TARGET_CHANNEL = "@Maruf_King_Pro_Predict_bot" 
-ADMIN_ID = 123456789  # আপনার টেলিগ্রাম আইডি (অপশনাল)
+TARGET_CHANNEL = "@Maruf_King_Pro_Predict_bot"  # আপনার চ্যানেলের ইউজারনেম
+ADMIN_ID = 123456789  # (অপশনাল)
 
-# API ENDPOINTS
+# ================= API LINKS (আপনার দেওয়া লিঙ্ক) =================
 API_1M = "https://draw.ar-lottery01.com/WinGo/WinGo_1M/GetHistoryIssuePage.json"
 API_30S = "https://draw.ar-lottery01.com/WinGo/WinGo_30S/GetHistoryIssuePage.json"
 
@@ -37,7 +36,7 @@ def keep_alive():
     t = Thread(target=run_http)
     t.start()
 
-# ================= BOT STATE & LOGIC =================
+# ================= BOT STATE =================
 class BotState:
     def __init__(self):
         self.is_running = False
@@ -48,27 +47,37 @@ class BotState:
 
 state = BotState()
 
-# --- PREDICTION ALGORITHMS ---
+# ================= PREDICTION LOGIC (আপনার দেওয়া কোড থেকে) =================
+
+# --- 1. GX 30S VIP Logic ---
+# Logic: hash = (seed * 7 + 3) % 10
 def get_30s_prediction(last_num):
     try:
         seed = int(last_num)
         hash_val = (seed * 7 + 3) % 10
         prediction = "BIG" if hash_val >= 5 else "SMALL"
+        
+        # 30s এর জন্য র‍্যান্ডম নম্বর জেনারেট (লজিক অনুযায়ী)
         rand_nums = [random.randint(0,9) for _ in range(3)] 
+        
         return {
             "type": prediction,
             "nums": rand_nums,
-            "conf": random.randint(90, 99),
+            "conf": random.randint(92, 98),
             "jackpot": "3, 1" if prediction == "BIG" else "0, 8",
             "method": "GX VIP Algo"
         }
     except:
         return None
 
+# --- 2. Rakib RGB 1M Logic ---
+# Logic: Random Triple -> if count(>=5) >= 2 then BIG else SMALL
 def get_1m_prediction():
-    nums = random.sample(range(10), 3)
+    nums = random.sample(range(10), 3) # ৩টি ইউনিক র‍্যান্ডম সংখ্যা
+    
     big_count = sum(1 for n in nums if n >= 5)
     prediction = "BIG" if big_count >= 2 else "SMALL"
+    
     return {
         "type": prediction,
         "nums": nums,
@@ -77,22 +86,24 @@ def get_1m_prediction():
         "method": "Rakib RGB Core"
     }
 
-# --- API FETCH ---
+# ================= API FETCH FUNCTION =================
 def fetch_latest_issue(mode):
     url = API_1M if mode == '1M' else API_30S
     try:
         headers = {
             "User-Agent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Mobile Safari/537.36"
         }
+        # Time param to prevent cache
         response = requests.get(f"{url}?t={int(time.time()*1000)}", headers=headers, timeout=5)
         data = response.json()
         if data and "data" in data and "list" in data["data"]:
-            return data["data"]["list"][0]
+            return data["data"]["list"][0] # Latest result object
     except Exception as e:
         print(f"API Error: {e}")
     return None
 
-# ================= MESSAGE FORMATTERS =================
+# ================= PREMIUM MESSAGE TEMPLATES =================
+
 def get_time():
     return datetime.now(pytz.timezone('Asia/Dhaka')).strftime("%H:%M:%S")
 
@@ -112,8 +123,8 @@ def format_start_msg(mode, session_id):
         f"━━━━━━━━━━━━━━━━━━━━━━━━\n"
         f"📅 <b>Session ID:</b> <code>{session_id}</code>\n"
         f"⏰ <b>Start Time:</b> {get_time()}\n"
-        f"🤖 <b>AI Mode:</b> {mode} Advanced Engine\n"
-        f"🔧 <b>AI Systems:</b> 6 VIP Logics\n"
+        f"🤖 <b>AI Mode:</b> {mode} VIP Engine\n"
+        f"🔧 <b>Source:</b> {'Rakib RGB' if mode=='1M' else 'GX VIP 30S'}\n"
         f"👥 <b>Active Groups:</b> 1\n"
         f"━━━━━━━━━━━━━━━━━━━━━━━━\n"
         f"✅ <b>System Ready</b>\n"
@@ -141,6 +152,7 @@ def format_signal(issue, data, mode):
 def format_result(issue, result_num, result_type, pred_type, is_win):
     status = "✅ <b>WIN!</b>" if is_win else "❌ <b>LOSS</b>"
     comment = "✨ সফল প্রেডিকশন!" if is_win else "⚠️ রিকভারি রাউন্ড আসছে..."
+    
     total = state.stats["total"]
     acc = (state.stats["wins"] / total * 100) if total > 0 else 0
     profit = state.stats["wins"] - state.stats["losses"]
@@ -187,10 +199,13 @@ def format_final_report():
         f"©️ {TARGET_CHANNEL}"
     )
 
-# ================= CORE LOOP =================
+# ================= MAIN LOOP =================
+
 async def game_loop(context: ContextTypes.DEFAULT_TYPE):
+    """২৪ ঘণ্টা চলবে এবং পিরিয়ড চেক করবে"""
     while state.is_running:
         try:
+            # ১. API থেকে লেটেস্ট ডাটা নেওয়া
             latest = fetch_latest_issue(state.game_mode)
             if not latest:
                 await asyncio.sleep(2)
@@ -200,17 +215,20 @@ async def game_loop(context: ContextTypes.DEFAULT_TYPE):
             latest_result_num = int(latest['number'])
             latest_result_type = "BIG" if latest_result_num >= 5 else "SMALL"
 
-            # Check Result
+            # ২. রেজাল্ট চেক করা (যদি আগের পিরিয়ড শেষ হয়ে থাকে)
             if state.last_issue and int(latest_issue) > int(state.last_issue):
+                
+                # যদি আমাদের কাছে পেন্ডিং প্রেডিকশন থাকে
                 if state.current_prediction_data:
                     pred_type = state.current_prediction_data['type']
                     is_win = (pred_type == latest_result_type)
                     
+                    # স্ট্যাটস আপডেট
                     state.stats["total"] += 1
                     if is_win: state.stats["wins"] += 1
                     else: state.stats["losses"] += 1
                     
-                    # SEND TO CHANNEL
+                    # রেজাল্ট চ্যানেলে পাঠানো
                     try:
                         await context.bot.send_message(
                             chat_id=TARGET_CHANNEL,
@@ -218,17 +236,25 @@ async def game_loop(context: ContextTypes.DEFAULT_TYPE):
                             parse_mode=ParseMode.HTML
                         )
                     except Exception as e:
-                        print(f"Error sending to channel: {e}")
+                        print(f"Error sending result: {e}")
                 
-                # Generate NEXT Prediction
+                # ৩. পরবর্তী পিরিয়ডের জন্য প্রেডিকশন তৈরি
                 next_issue = str(int(latest_issue) + 1)
-                prediction = get_30s_prediction(latest_result_num) if state.game_mode == '30S' else get_1m_prediction()
+                
+                prediction = None
+                if state.game_mode == '30S':
+                    # GX VIP Logic ব্যবহার করে
+                    prediction = get_30s_prediction(latest_result_num)
+                else:
+                    # Rakib RGB Logic ব্যবহার করে
+                    prediction = get_1m_prediction()
                 
                 if prediction:
                     state.current_prediction_data = prediction
+                    # একটু সময় নেওয়া (Calculation Simulation)
                     await asyncio.sleep(2) 
                     
-                    # SEND TO CHANNEL
+                    # সিগন্যাল চ্যানেলে পাঠানো
                     try:
                         await context.bot.send_message(
                             chat_id=TARGET_CHANNEL,
@@ -236,18 +262,22 @@ async def game_loop(context: ContextTypes.DEFAULT_TYPE):
                             parse_mode=ParseMode.HTML
                         )
                     except Exception as e:
-                        print(f"Error sending to channel: {e}")
+                        print(f"Error sending signal: {e}")
                 
+                # লাস্ট ইস্যু আপডেট
                 state.last_issue = latest_issue
             
-            await asyncio.sleep(3 if state.game_mode == '30S' else 5)
+            # 30S হলে দ্রুত লুপ ঘুরবে, 1M হলে একটু ধীর
+            await asyncio.sleep(2 if state.game_mode == '30S' else 4)
 
         except Exception as e:
             logging.error(f"Loop Error: {e}")
             await asyncio.sleep(5)
 
-# ================= COMMAND HANDLERS =================
+# ================= COMMANDS =================
+
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    # বাটন সেটআপ
     keyboard = [['📢 Connect 1M', '📢 Connect 30S']]
     await update.message.reply_text(
         "👋 <b>Welcome Boss!</b>\nSelect market to connect:",
@@ -270,10 +300,10 @@ async def connect_market(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     session_id = f"SESS{datetime.now().strftime('%Y%m%d%H%M')}"
     
-    # Notify Admin (You)
+    # ইনবক্সে কনফার্মেশন
     await update.message.reply_text(f"✅ Bot started for {TARGET_CHANNEL} in {mode} mode.", reply_markup=ReplyKeyboardRemove())
     
-    # Send Start Message TO CHANNEL
+    # চ্যানেলে স্টার্ট মেসেজ
     try:
         await context.bot.send_message(
             chat_id=TARGET_CHANNEL,
@@ -281,26 +311,29 @@ async def connect_market(update: Update, context: ContextTypes.DEFAULT_TYPE):
             parse_mode=ParseMode.HTML
         )
     except Exception as e:
-        await update.message.reply_text(f"❌ Error connecting to channel: {e}\nMake sure bot is ADMIN in {TARGET_CHANNEL}")
+        await update.message.reply_text(f"❌ Error: {e}\nMake sure bot is ADMIN in the channel!")
         state.is_running = False
         return
 
-    # Initialize
+    # প্রথম সিগন্যাল জেনারেট
     latest = fetch_latest_issue(mode)
     if latest:
         state.last_issue = latest['issueNumber']
         next_issue = str(int(state.last_issue) + 1)
+        
+        # মোড অনুযায়ী লজিক কল
         pred = get_30s_prediction(latest['number']) if mode == '30S' else get_1m_prediction()
         state.current_prediction_data = pred
         
         await asyncio.sleep(2)
-        # SEND SIGNAL TO CHANNEL
+        # চ্যানেলে সিগন্যাল পাঠানো
         await context.bot.send_message(
             chat_id=TARGET_CHANNEL,
             text=format_signal(next_issue, pred, mode),
             parse_mode=ParseMode.HTML
         )
 
+    # লুপ চালু
     context.application.create_task(game_loop(context))
 
 async def stop_bot(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -311,7 +344,6 @@ async def stop_bot(update: Update, context: ContextTypes.DEFAULT_TYPE):
     state.is_running = False
     await update.message.reply_text("🛑 Bot stopped.")
     
-    # Send Summary TO CHANNEL
     try:
         await context.bot.send_message(
             chat_id=TARGET_CHANNEL,
@@ -327,5 +359,6 @@ if __name__ == '__main__':
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("off", stop_bot))
     application.add_handler(MessageHandler(filters.Regex(r'Connect'), connect_market))
+    
     print("Bot is running...")
     application.run_polling()
