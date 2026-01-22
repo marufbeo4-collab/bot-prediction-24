@@ -15,7 +15,7 @@ from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandl
 # ================= CONFIGURATION =================
 BOT_TOKEN = "8595453345:AAFUIOwzQN-1eWAeLprnM6zu4JtwGASp9mI"  # <--- আপনার টোকেন বসান
 TARGET_CHANNEL = "@dk_mentor_maruf_official" 
-ADMIN_ID = 123456789 
+ADMIN_ID = -1002629495753 
 
 # ================= STICKER DATABASE =================
 STICKERS = {
