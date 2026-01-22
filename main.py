@@ -13,7 +13,7 @@ from telegram.constants import ParseMode
 from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandler, filters
 
 # ================= CONFIGURATION =================
-BOT_TOKEN = "8595453345:AAFUIOwzQN-1eWAeLprnM6zu4JtwGASp9mI"  # <--- আপনার টোকেন এখানে বসান
+BOT_TOKEN = "8595453345:AAFUIOwzQN-1eWAeLprnM6zu4JtwGASp9mI"  # <--- আপনার টোকেন বসান
 TARGET_CHANNEL = "@dk_mentor_maruf_official" 
 ADMIN_ID = 123456789 
 
@@ -107,24 +107,35 @@ def generate_prediction(last_result_type):
         "type": prediction
     }
 
-# ================= API FETCH (BYPASS) =================
+# ================= ROBUST API FETCH =================
 def fetch_latest_issue(mode):
     base_url = API_1M if mode == '1M' else API_30S
+    
+    # 5 Layer Protection to bypass block
     proxies = [
+        f"{base_url}?t={int(time.time()*1000)}", # Direct
         f"https://corsproxy.io/?{base_url}?t={int(time.time()*1000)}", 
         f"https://api.allorigins.win/raw?url={base_url}",
-        f"{base_url}?t={int(time.time()*1000)}"
+        f"https://thingproxy.freeboard.io/fetch/{base_url}",
+        f"https://api.codetabs.com/v1/proxy?quest={base_url}"
     ]
-    headers = {"User-Agent": "Mozilla/5.0", "Referer": "https://dkwin9.com/"}
+
+    headers = {
+        "User-Agent": f"Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/{random.randint(100, 120)}.0.0.0 Safari/537.36",
+        "Referer": "https://dkwin9.com/",
+        "Origin": "https://dkwin9.com"
+    }
 
     for url in proxies:
         try:
-            response = requests.get(url, headers=headers, timeout=5)
+            response = requests.get(url, headers=headers, timeout=6)
             if response.status_code == 200:
                 data = response.json()
                 if data and "data" in data and "list" in data["data"]:
                     return data["data"]["list"][0]
-        except: continue
+        except:
+            continue
+    
     return None
 
 # ================= CLEAN MESSAGES =================
