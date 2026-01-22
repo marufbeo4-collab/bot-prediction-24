@@ -13,33 +13,23 @@ from telegram.constants import ParseMode
 from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandler, filters
 
 # ================= CONFIGURATION =================
-BOT_TOKEN = "8595453345:AAFUIOwzQN-1eWAeLprnM6zu4JtwGASp9mI"  # <--- আপনার টোকেন এখানে বসান
+BOT_TOKEN = "8595453345:AAFUIOwzQN-1eWAeLprnM6zu4JtwGASp9mI"  # <--- টোকেন বসান
 TARGET_CHANNEL = "@dk_mentor_maruf_official" 
 ADMIN_ID = 123456789 
 
-# ================= STICKER DATABASE =================
+# STICKERS
 STICKERS = {
     'BIG_PRED': "CAACAgUAAxkBAAEQThJpcmSl40i0bvVSOxcDpVmqqeuqWQACySIAAlAYqVXUubH8axJhFzgE",
     'SMALL_PRED': "CAACAgUAAxkBAAEQThZpcmTJ3JsaZHTYtVIcE4YEFuXDFgAC9BoAApWhsVWD2IhYoJfTkzgE",
-    
-    'WIN_BIG_RES': "CAACAgUAAxkBAAEQTjhpcmXknd41yv99at8qxdgw3ivEkAACyRUAAraKsFSky2Ut1kt-hjgE",
-    'WIN_SMALL_RES': "CAACAgUAAxkBAAEQTjlpcmXkF8R0bNj0jb1Xd8NF-kaTSQAC7DQAAhnRsVTS3-Z8tj-kajgE",
-    
-    'LOSS': [
-        "CAACAgUAAxkBAAEQTcVpclMOQ7uFjrUs9ss15ij7rKBj9AACsB0AAobyqFV1rI6qlIIdeTgE",
-        "CAACAgUAAxkBAAEQTh5pcmTbrSEe58RRXvtu_uwEAWZoQQAC5BEAArgxYVUhMlnBGKmcbzgE"
-    ],
-    
+    'WIN_GENERIC': ["CAACAgUAAxkBAAEQThhpcmTQoyChKDDt5k4zJRpKMpPzxwACqxsAAheUwFUano7QrNeU_jgE"],
+    'WIN_BIG': "CAACAgUAAxkBAAEQTjhpcmXknd41yv99at8qxdgw3ivEkAACyRUAAraKsFSky2Ut1kt-hjgE",
+    'WIN_SMALL': "CAACAgUAAxkBAAEQTjlpcmXkF8R0bNj0jb1Xd8NF-kaTSQAC7DQAAhnRsVTS3-Z8tj-kajgE",
+    'LOSS': ["CAACAgUAAxkBAAEQTcVpclMOQ7uFjrUs9ss15ij7rKBj9AACsB0AAobyqFV1rI6qlIIdeTgE"],
     'SUPER_WIN': {
         2: "CAACAgUAAxkBAAEQTiBpcmUfm9aQmlIHtPKiG2nE2e6EeAACcRMAAiLWqFSpdxWmKJ1TXzgE",
         3: "CAACAgUAAxkBAAEQTiFpcmUgdgJQ_czeoFyRhNZiZI2lwwAC8BcAAv8UqFSVBQEdUW48HTgE",
         4: "CAACAgUAAxkBAAEQTiJpcmUgSydN-tKxoSVdFuAvCcJ3fQACvSEAApMRqFQoUYBnH5Pc7TgE",
-        5: "CAACAgUAAxkBAAEQTiNpcmUgu_dP3wKT2k94EJCiw3u52QACihoAArkfqFSlrldtXbLGGDgE",
-        6: "CAACAgUAAxkBAAEQTiRpcmUhQJUjd2ukdtfEtBjwtMH4MAACWRgAAsTFqVTato0SmSN-6jgE",
-        7: "CAACAgUAAxkBAAEQTiVpcmUhha9HAAF19fboYayfUrm3tdYAAioXAAIHgKhUD0QmGyF5Aug4BA",
-        8: "CAACAgUAAxkBAAEQTixpcmUmevnNEqUbr0qbbVgW4psMNQACMxUAAow-qFSnSz4Ik1ddNzgE",
-        9: "CAACAgUAAxkBAAEQTi1pcmUmpSxAHo2pvR-GjCPTmkLr0AACLh0AAhCRqFRH5-2YyZKq1jgE",
-        10: "CAACAgUAAxkBAAEQTi5pcmUmjmjp7oXg4InxI1dGYruxDwACqBgAAh19qVT6X_-oEywCkzgE"
+        5: "CAACAgUAAxkBAAEQTiNpcmUgu_dP3wKT2k94EJCiw3u52QACihoAArkfqFSlrldtXbLGGDgE"
     },
     'START': "CAACAgUAAxkBAAEQTjJpcmWOexDHyK90IXQU5Qzo18uBKAACwxMAAlD6QFRRMClp8Q4JAAE4BA"
 }
@@ -75,34 +65,33 @@ class BotState:
 
 state = BotState()
 
-# ================= NEW MASTER LOGIC (MATH FORMULA) =================
-def calculate_prediction(last_number, last_issue):
+# ================= SAFE LOGIC (TREND FOLLOWER) =================
+def calculate_prediction(last_result_type):
     """
-    Formula: (Last Number + Last Digit of Period) % 10
-    If result is 0-4 -> SMALL, 5-9 -> BIG
+    Logic: Follow the last result (Trend Strategy).
+    If last was BIG -> Predict BIG.
+    If last was SMALL -> Predict SMALL.
+    This catches 'Dragon' streaks which is most common.
     """
-    try:
-        ln = int(last_number)
-        period_last_digit = int(str(last_issue)[-1])
-        
-        # ম্যাথমেটিকাল ক্যালকুলেশন
-        calc = (ln + period_last_digit + 7) % 10 
-        
-        prediction = "BIG" if calc >= 5 else "SMALL"
-        
-        # জ্যাকপট তৈরি
-        j1 = random.randint(0, 4) if prediction == "SMALL" else random.randint(5, 9)
-        j2 = random.randint(0, 9)
-        
-        return {
-            "type": prediction,
-            "conf": random.randint(97, 100),
-            "jackpot": f"{j1}, {j2}"
-        }
-    except:
+    if not last_result_type:
         return {"type": random.choice(["BIG", "SMALL"]), "conf": 95, "jackpot": "3, 8"}
+    
+    # 80% Trend Follow, 20% Random (to break zigzag)
+    if random.randint(1, 100) <= 80:
+        prediction = last_result_type
+    else:
+        prediction = "SMALL" if last_result_type == "BIG" else "BIG"
 
-# ================= ROBUST API FETCH =================
+    j1 = random.randint(0, 4) if prediction == "SMALL" else random.randint(5, 9)
+    j2 = random.randint(0, 9)
+    
+    return {
+        "type": prediction,
+        "conf": random.randint(97, 100),
+        "jackpot": f"{j1}, {j2}"
+    }
+
+# ================= API FETCH =================
 def fetch_latest_issue(mode):
     base_url = API_1M if mode == '1M' else API_30S
     proxies = [
@@ -128,7 +117,7 @@ def fetch_latest_issue(mode):
 # ================= MESSAGES =================
 def format_signal(issue, data, mode):
     loss_s = state.stats['streak_loss']
-    plan = f"🟢 Start Level 1" if loss_s == 0 else f"⚠️ Recovery Step {loss_s + 1} ({loss_s*2 + 1}X)"
+    plan = f"🟢 Start Level 1" if loss_s == 0 else f"⚠️ Recovery Step {loss_s + 1} ({loss_s*2 + 2}X)"
     
     return (
         f"💠 <b>DK MARUF VIP SIGNAL</b>\n"
@@ -171,6 +160,8 @@ def format_summary():
 
 # ================= GAME LOOP =================
 async def game_loop(context: ContextTypes.DEFAULT_TYPE):
+    last_res_type = None # লজিকের জন্য মেমোরি
+
     while state.is_running:
         try:
             latest = fetch_latest_issue(state.game_mode)
@@ -181,6 +172,7 @@ async def game_loop(context: ContextTypes.DEFAULT_TYPE):
             latest_issue = latest['issueNumber']
             latest_res_num = int(latest['number'])
             latest_res_type = "BIG" if latest_res_num >= 5 else "SMALL"
+            last_res_type = latest_res_type # আপডেট করা হচ্ছে
             
             next_issue = str(int(latest_issue) + 1)
 
@@ -211,8 +203,7 @@ async def game_loop(context: ContextTypes.DEFAULT_TYPE):
                     
                     if s_id:
                         msg = await context.bot.send_sticker(chat_id=TARGET_CHANNEL, sticker=s_id)
-                        # লস হলে ডিলিট লিস্টে যোগ করা
-                        if not is_win: state.messages_to_delete.append(msg.message_id)
+                        if not is_win: state.messages_to_delete.append(msg.message_id) # লস স্টিকার সেভ
                 except: pass
 
                 # 2. SEND RESULT TEXT
@@ -222,17 +213,17 @@ async def game_loop(context: ContextTypes.DEFAULT_TYPE):
                         text=format_result(latest_issue, latest_res_type, latest_res_num, pred_type, is_win),
                         parse_mode=ParseMode.HTML
                     )
-                    # লস হলে ডিলিট লিস্টে যোগ করা
-                    if not is_win: state.messages_to_delete.append(msg.message_id)
+                    if not is_win: state.messages_to_delete.append(msg.message_id) # লস মেসেজ সেভ
                 except: pass
                 
                 state.active_prediction = None
                 state.last_period_processed = latest_issue
 
-            # --- NEXT PREDICTION ---
+            # --- NEXT PREDICTION (IMMEDIATE) ---
             if state.active_prediction is None and state.last_period_processed != next_issue:
-                # মাস্টার লজিক ব্যবহার করে প্রেডিকশন
-                data = calculate_prediction(latest_res_num, latest_issue)
+                
+                # লজিক ব্যবহার করে প্রেডিকশন
+                data = calculate_prediction(last_res_type)
                 
                 state.active_prediction = {"period": next_issue, "type": data['type']}
                 
@@ -241,17 +232,14 @@ async def game_loop(context: ContextTypes.DEFAULT_TYPE):
                 try:
                     # সিগন্যাল স্টিকার
                     s = STICKERS['BIG_PRED'] if data['type'] == "BIG" else STICKERS['SMALL_PRED']
-                    msg_s = await context.bot.send_sticker(chat_id=TARGET_CHANNEL, sticker=s)
+                    await context.bot.send_sticker(chat_id=TARGET_CHANNEL, sticker=s)
                     
                     # সিগন্যাল টেক্সট
-                    msg_t = await context.bot.send_message(
+                    await context.bot.send_message(
                         chat_id=TARGET_CHANNEL,
                         text=format_signal(next_issue, data, state.game_mode),
                         parse_mode=ParseMode.HTML
                     )
-                    
-                    # এগুলোও লিস্টে রাখি, যদি লস হয় পরে ডিলিট করা যাবে (Optional Logic, Result based deletion is safer)
-                    # আপাতত শুধু রেজাল্ট ডিলিট করছি যাতে সিগন্যাল থাকে।
                 except: pass
 
             await asyncio.sleep(2)
@@ -284,12 +272,16 @@ async def connect(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     try:
         await context.bot.send_sticker(chat_id=TARGET_CHANNEL, sticker=STICKERS['START'])
+        # Immediate Start
         latest = fetch_latest_issue(mode)
         if latest:
+            last_res = "BIG" if int(latest['number']) >= 5 else "SMALL"
             next_iss = str(int(latest['issueNumber']) + 1)
             state.last_period_processed = latest['issueNumber']
-            data = calculate_prediction(latest['number'], latest['issueNumber'])
+            
+            data = calculate_prediction(last_res)
             state.active_prediction = {"period": next_iss, "type": data['type']}
+            
             await asyncio.sleep(1)
             s = STICKERS['BIG_PRED'] if data['type'] == "BIG" else STICKERS['SMALL_PRED']
             await context.bot.send_sticker(chat_id=TARGET_CHANNEL, sticker=s)
@@ -303,18 +295,15 @@ async def stop(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("🛑 Stopping & Cleaning...")
     
     # --- DELETE LOSS MESSAGES ---
+    count = 0
     if state.messages_to_delete:
-        count = 0
         for msg_id in state.messages_to_delete:
             try:
                 await context.bot.delete_message(chat_id=TARGET_CHANNEL, message_id=msg_id)
                 count += 1
-                await asyncio.sleep(0.1) # টেলিগ্রামের স্প্যাম প্রটেকশন এড়াতে
-            except Exception as e:
-                print(f"Delete Error: {e}")
-        await update.message.reply_text(f"🧹 Cleaned {count} loss messages!")
-    
-    state.messages_to_delete = [] # মেমোরি ক্লিয়ার
+                await asyncio.sleep(0.1) 
+            except: pass
+        state.messages_to_delete = [] 
     
     try: await context.bot.send_message(chat_id=TARGET_CHANNEL, text=format_summary(), parse_mode=ParseMode.HTML)
     except: pass
