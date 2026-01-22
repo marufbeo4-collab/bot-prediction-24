@@ -85,14 +85,13 @@ class BotState:
         }
         self.last_period_processed = None 
         self.active_prediction = None 
+        # লস মেসেজ ট্র্যাক করার জন্য নতুন লিস্ট
+        self.loss_messages_ids = []
 
 state = BotState()
 
-# ================= LOGIC (UPDATED: TREND FOLLOWING) =================
+# ================= LOGIC (TREND FOLLOWING) =================
 def generate_prediction(last_result_type):
-    # শুধু র‍্যান্ডম না, ট্রেন্ড ফলো করার চেষ্টা করবে
-    # যদি আগেরবার BIG আসে, ৬০% চান্স থাকে আবার BIG আসার (ZigZag কম হয়)
-    
     if last_result_type:
         chance = random.randint(1, 100)
         if chance <= 60:
@@ -100,7 +99,6 @@ def generate_prediction(last_result_type):
         else:
             prediction = "SMALL" if last_result_type == "BIG" else "BIG" # Reverse
     else:
-        # ফার্স্ট টাইম সম্পূর্ণ র‍্যান্ডম
         prediction = random.choice(["BIG", "SMALL"])
         
     return {
@@ -110,10 +108,8 @@ def generate_prediction(last_result_type):
 # ================= ROBUST API FETCH =================
 def fetch_latest_issue(mode):
     base_url = API_1M if mode == '1M' else API_30S
-    
-    # 5 Layer Protection to bypass block
     proxies = [
-        f"{base_url}?t={int(time.time()*1000)}", # Direct
+        f"{base_url}?t={int(time.time()*1000)}", 
         f"https://corsproxy.io/?{base_url}?t={int(time.time()*1000)}", 
         f"https://api.allorigins.win/raw?url={base_url}",
         f"https://thingproxy.freeboard.io/fetch/{base_url}",
@@ -135,15 +131,12 @@ def fetch_latest_issue(mode):
                     return data["data"]["list"][0]
         except:
             continue
-    
     return None
 
-# ================= CLEAN MESSAGES =================
+# ================= MESSAGES =================
 
 def format_signal(issue, data, mode):
-    # Recovery Text Logic
     loss_streak = state.stats['streak_loss']
-    
     if loss_streak == 0:
         rec_text = "🟢 Start Level 1"
     elif loss_streak == 1:
@@ -169,10 +162,8 @@ def format_signal(issue, data, mode):
 def format_result(issue, result_type, result_num, pred_type, is_win):
     if is_win:
         streak = state.stats['streak_win']
-        if streak >= 2 and streak <= 10:
+        if streak >= 2:
             status = f"🔥 {streak} SUPER WIN 🔥"
-        elif streak > 10:
-            status = f"🔥🔥 {streak} SUPER WIN 🔥🔥"
         else:
             status = "✅ WIN ✅"
     else:
@@ -194,14 +185,13 @@ def format_summary():
         f"🛑 <b>SESSION ENDED</b>\n"
         f"✅ <b>Wins:</b> {wins}\n"
         f"❌ <b>Losses:</b> {losses}\n"
-        f"💰 <b>Net Score:</b> {wins - losses}\n"
-        f"<i>Thanks for joining!</i>"
+        f"🧹 <i>Cleaning Loss History...</i>"
     )
 
 # ================= GAME LOOP =================
 
 async def game_loop(context: ContextTypes.DEFAULT_TYPE):
-    last_known_result_type = None # লজিকের জন্য
+    last_known_result_type = None 
 
     while state.is_running:
         try:
@@ -214,7 +204,7 @@ async def game_loop(context: ContextTypes.DEFAULT_TYPE):
             latest_result_num = int(latest['number'])
             latest_result_type = "BIG" if latest_result_num >= 5 else "SMALL"
             
-            last_known_result_type = latest_result_type # সেইভ করে রাখা পরের লজিকের জন্য
+            last_known_result_type = latest_result_type
             next_issue = str(int(latest_issue) + 1)
 
             # --- PROCESS RESULT ---
@@ -232,7 +222,7 @@ async def game_loop(context: ContextTypes.DEFAULT_TYPE):
                     state.stats["streak_loss"] += 1
                     state.stats["streak_win"] = 0
                 
-                # Sticker Logic
+                # 1. Send Sticker
                 try:
                     sticker = None
                     if is_win:
@@ -249,15 +239,22 @@ async def game_loop(context: ContextTypes.DEFAULT_TYPE):
                         sticker = random.choice(STICKERS['LOSS'])
                     
                     if sticker:
-                        await context.bot.send_sticker(chat_id=TARGET_CHANNEL, sticker=sticker)
+                        sent_sticker = await context.bot.send_sticker(chat_id=TARGET_CHANNEL, sticker=sticker)
+                        # লস হলে স্টিকার আইডি সেভ করুন
+                        if not is_win:
+                            state.loss_messages_ids.append(sent_sticker.message_id)
                 except: pass
 
+                # 2. Send Result Message
                 try:
-                    await context.bot.send_message(
+                    sent_msg = await context.bot.send_message(
                         chat_id=TARGET_CHANNEL,
                         text=format_result(latest_issue, latest_result_type, latest_result_num, pred_type, is_win),
                         parse_mode=ParseMode.HTML
                     )
+                    # লস হলে মেসেজ আইডি সেভ করুন
+                    if not is_win:
+                        state.loss_messages_ids.append(sent_msg.message_id)
                 except: pass
                 
                 state.active_prediction = None
@@ -265,9 +262,7 @@ async def game_loop(context: ContextTypes.DEFAULT_TYPE):
 
             # --- SEND NEXT SIGNAL ---
             if state.active_prediction is None and state.last_period_processed != next_issue:
-                # লজিক আপডেট: আগের রেজাল্ট অনুযায়ী প্রেডিকশন
                 data = generate_prediction(last_known_result_type)
-                
                 state.active_prediction = {
                     "period": next_issue,
                     "type": data['type']
@@ -275,13 +270,11 @@ async def game_loop(context: ContextTypes.DEFAULT_TYPE):
                 
                 await asyncio.sleep(1)
                 
-                # ১. প্রেডিকশন স্টিকার
                 try:
                     pred_sticker = STICKERS['BIG_PRED'] if data['type'] == "BIG" else STICKERS['SMALL_PRED']
                     await context.bot.send_sticker(chat_id=TARGET_CHANNEL, sticker=pred_sticker)
                 except: pass
 
-                # ২. প্রেডিকশন টেক্সট
                 try:
                     await context.bot.send_message(
                         chat_id=TARGET_CHANNEL,
@@ -314,20 +307,21 @@ async def connect_market(update: Update, context: ContextTypes.DEFAULT_TYPE):
     mode = '1M' if '1M' in msg else '30S'
     state.game_mode = mode
     state.is_running = True
+    # রিসেট সবকিছু
     state.stats = {"wins": 0, "losses": 0, "streak_win": 0, "streak_loss": 0}
     state.active_prediction = None
     state.last_period_processed = None
+    state.loss_messages_ids = [] # লিস্ট ক্লিয়ার
     
     await update.message.reply_text(f"✅ Active: {mode}", reply_markup=ReplyKeyboardRemove())
     
-    # Pre-Session Stickers
+    # Pre-Session
     for sticker in STICKERS['PRE_SESSION']:
         try:
             await context.bot.send_sticker(chat_id=TARGET_CHANNEL, sticker=sticker)
             await asyncio.sleep(0.5)
         except: pass
 
-    # Session Start Sticker & Msg
     try:
         await context.bot.send_sticker(chat_id=TARGET_CHANNEL, sticker=STICKERS['SESSION_START'])
         await context.bot.send_message(
@@ -339,20 +333,16 @@ async def connect_market(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # Immediate Start
     latest = fetch_latest_issue(mode)
-    if not latest:
-        await update.message.reply_text("⚠️ Waiting for API...")
-    else:
+    if latest:
         latest_issue = latest['issueNumber']
         latest_res_type = "BIG" if int(latest['number']) >= 5 else "SMALL"
         next_issue = str(int(latest_issue) + 1)
         
         state.last_period_processed = latest_issue
-        
         data = generate_prediction(latest_res_type)
         state.active_prediction = {"period": next_issue, "type": data['type']}
         
         await asyncio.sleep(1)
-        # Send Pred Sticker + Msg
         try:
             s = STICKERS['BIG_PRED'] if data['type'] == "BIG" else STICKERS['SMALL_PRED']
             await context.bot.send_sticker(chat_id=TARGET_CHANNEL, sticker=s)
@@ -367,7 +357,26 @@ async def connect_market(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def stop_bot(update: Update, context: ContextTypes.DEFAULT_TYPE):
     state.is_running = False
-    await update.message.reply_text("🛑 Stopped.")
+    await update.message.reply_text("🛑 Stopping & Cleaning Losses...")
+
+    # --- DELETE LOSS MESSAGES ---
+    if state.loss_messages_ids:
+        deleted_count = 0
+        for msg_id in state.loss_messages_ids:
+            try:
+                # মেসেজ ডিলিট কমান্ড
+                await context.bot.delete_message(chat_id=TARGET_CHANNEL, message_id=msg_id)
+                deleted_count += 1
+                await asyncio.sleep(0.1) # Telegram API limit এড়াতে একটু গ্যাপ
+            except Exception as e:
+                print(f"Failed to delete {msg_id}: {e}")
+        
+        # লিস্ট ক্লিয়ার
+        state.loss_messages_ids.clear()
+        await update.message.reply_text(f"🗑️ Deleted {deleted_count} loss messages.")
+    else:
+        await update.message.reply_text("✅ No losses to delete.")
+
     try:
         await context.bot.send_message(
             chat_id=TARGET_CHANNEL,
