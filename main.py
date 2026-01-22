@@ -13,7 +13,7 @@ from telegram.constants import ParseMode
 from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandler, filters
 
 # ================= CONFIGURATION =================
-BOT_TOKEN = "8183778698:AAGiOJuiN4ZRT7iEvIQLM3JaHc_tu1EFSWY"  # <--- আপনার টোকেন বসান
+BOT_TOKEN = "8595453345:AAFUIOwzQN-1eWAeLprnM6zu4JtwGASp9mI"  # <--- আপনার টোকেন বসান
 TARGET_CHANNEL = "@dk_mentor_maruf_official"  # আপনার চ্যানেলের ইউজারনেম
 ADMIN_ID = 123456789  # (অপশনাল)
 
