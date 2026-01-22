@@ -12,12 +12,12 @@ from telegram import Update, ReplyKeyboardMarkup, ReplyKeyboardRemove
 from telegram.constants import ParseMode
 from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandler, filters
 
-# ================= CONFIGURATION (সেটিংস) =================
+# ================= CONFIGURATION =================
 BOT_TOKEN = "8595453345:AAFUIOwzQN-1eWAeLprnM6zu4JtwGASp9mI"  # <--- আপনার টোকেন এখানে বসান
 TARGET_CHANNEL = "@dk_mentor_maruf_official" 
 ADMIN_ID = 123456789 
 
-# STICKER CONFIG (আপনার দেওয়া আইডি)
+# STICKERS
 STICKER_WIN = "CAACAgUAAxkBAAEQTcNpclMMXJSUTpl9-V6LE2R39r4G7gAC0x4AAvodqFXSg4ICDj9BZzgE" 
 STICKER_LOSS = "CAACAgUAAxkBAAEQTcVpclMOQ7uFjrUs9ss15ij7rKBj9AACsB0AAobyqFV1rI6qlIIdeTgE"
 
@@ -51,51 +51,47 @@ class BotState:
 
 state = BotState()
 
-# ================= LOGIC SECTION =================
+# ================= LOGIC =================
 def generate_prediction():
-    # Rakib's Logic (3 Random Numbers)
     nums = random.sample(range(10), 3) 
     big_count = sum(1 for n in nums if n >= 5)
     prediction = "BIG" if big_count >= 2 else "SMALL"
-    
     return {
         "type": prediction,
         "conf": random.randint(95, 99),
         "jackpot": f"{nums[0]}, {nums[1]}", 
-        "analysis": "Trend Analysis"
     }
 
-# ================= API FETCH (ADVANCED) =================
+# ================= API FETCH (BYPASS MODE) =================
 def fetch_latest_issue(mode):
-    url = API_1M if mode == '1M' else API_30S
-    try:
-        # Real Browser Headers to bypass blocks
-        headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-            "Accept": "application/json, text/plain, */*",
-            "Referer": "https://dkwin9.com/"
-        }
-        response = requests.get(f"{url}?t={int(time.time()*1000)}", headers=headers, timeout=10)
-        data = response.json()
-        if data and "data" in data and "list" in data["data"]:
-            return data["data"]["list"][0] 
-    except Exception as e:
-        print(f"API Fetch Error: {e}")
-        return None
+    base_url = API_1M if mode == '1M' else API_30S
+    
+    # ৩টি পদ্ধতিতে ডাটা আনার চেষ্টা করবে (Block এড়ানোর জন্য)
+    urls_to_try = [
+        f"https://corsproxy.io/?{base_url}?t={int(time.time()*1000)}", # Method 1: HTML Proxy
+        f"https://api.allorigins.win/raw?url={base_url}?t={int(time.time()*1000)}", # Method 2: Raw Proxy
+        f"{base_url}?t={int(time.time()*1000)}" # Method 3: Direct
+    ]
+
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36",
+        "Referer": "https://dkwin9.com/"
+    }
+
+    for url in urls_to_try:
+        try:
+            response = requests.get(url, headers=headers, timeout=5)
+            if response.status_code == 200:
+                data = response.json()
+                # ডাটা ভ্যালিড কিনা চেক করা
+                if data and "data" in data and "list" in data["data"]:
+                    return data["data"]["list"][0]
+        except:
+            continue # ফেইল করলে পরের URL ট্রাই করবে
+    
+    return None
 
 # ================= MESSAGES =================
-
-def format_start_msg(mode):
-    return (
-        f"🟢 <b>SESSION STARTED</b>\n"
-        f"━━━━━━━━━━━━━━━━━━\n"
-        f"👤 <b>Owner:</b> DK MENTOR MARUF\n"
-        f"🎲 <b>Mode:</b> {mode} VIP\n"
-        f"🤖 <b>AI Engine:</b> Active\n"
-        f"━━━━━━━━━━━━━━━━━━\n"
-        f"🚀 <i>Connecting to server...</i>"
-    )
-
 def format_signal(issue, data, mode):
     return (
         f"🔥 <b>DK MENTOR MARUF PREDICTION</b>\n"
@@ -142,36 +138,29 @@ def format_summary():
     )
 
 # ================= GAME LOOP =================
-
 async def game_loop(context: ContextTypes.DEFAULT_TYPE):
-    error_count = 0
     while state.is_running:
         try:
-            # 1. API Fetch
+            # API Fetch with Bypass
             latest = fetch_latest_issue(state.game_mode)
             
             if not latest:
-                error_count += 1
-                if error_count % 5 == 0: 
-                    print("⚠️ API is not responding...")
+                # ডাটা না পেলে ২ সেকেন্ড অপেক্ষা করে আবার ট্রাই করবে, লুপ ব্রেক করবে না
                 await asyncio.sleep(2)
                 continue
-            
-            error_count = 0 
 
             latest_issue = latest['issueNumber']
             latest_result_num = int(latest['number'])
             latest_result_type = "BIG" if latest_result_num >= 5 else "SMALL"
             
-            # Next Period Calculation
             next_issue = str(int(latest_issue) + 1)
 
-            # 2. Check Result (যদি আগের প্রেডিকশন থাকে)
+            # --- RESULT CHECK ---
             if state.active_prediction and state.active_prediction['period'] == latest_issue:
                 pred_type = state.active_prediction['type']
                 is_win = (pred_type == latest_result_type)
                 
-                # Update Stats
+                # Stats Update
                 state.stats["total"] += 1
                 if is_win: state.stats["wins"] += 1
                 else: state.stats["losses"] += 1
@@ -180,10 +169,10 @@ async def game_loop(context: ContextTypes.DEFAULT_TYPE):
                 try:
                     sticker = STICKER_WIN if is_win else STICKER_LOSS
                     await context.bot.send_sticker(chat_id=TARGET_CHANNEL, sticker=sticker)
-                except Exception as e:
-                    print(f"Sticker Error: {e}")
+                except:
+                    pass
 
-                # Send Result Text
+                # Send Result
                 try:
                     await context.bot.send_message(
                         chat_id=TARGET_CHANNEL,
@@ -196,9 +185,8 @@ async def game_loop(context: ContextTypes.DEFAULT_TYPE):
                 state.active_prediction = None
                 state.last_period_processed = latest_issue
 
-            # 3. Send NEXT Signal (তৎক্ষণাৎ)
+            # --- NEXT SIGNAL ---
             if state.active_prediction is None and state.last_period_processed != next_issue:
-                # Generate Logic
                 data = generate_prediction()
                 
                 state.active_prediction = {
@@ -224,7 +212,6 @@ async def game_loop(context: ContextTypes.DEFAULT_TYPE):
             await asyncio.sleep(3)
 
 # ================= HANDLERS =================
-
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard = [['⚡ Connect 1M', '⚡ Connect 30S']]
     await update.message.reply_text(
@@ -248,24 +235,11 @@ async def connect_market(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     await update.message.reply_text(f"✅ Started {mode} for {TARGET_CHANNEL}", reply_markup=ReplyKeyboardRemove())
     
-    # Send Start Message to Channel
-    try:
-        await context.bot.send_message(
-            chat_id=TARGET_CHANNEL,
-            text=format_start_msg(mode),
-            parse_mode=ParseMode.HTML
-        )
-    except Exception as e:
-        await update.message.reply_text(f"❌ Channel Error: {e}\nMake sure Bot is ADMIN in channel!")
-        state.is_running = False
-        return
-
-    # --- IMMEDIATE START CHECK ---
+    # --- IMMEDIATE START ---
     latest = fetch_latest_issue(mode)
     if not latest:
-        await update.message.reply_text("⚠️ <b>Warning:</b> API থেকে ডাটা আসছে না। বট চেষ্টা চালিয়ে যাচ্ছে...")
+        await update.message.reply_text("⚠️ <b>Connecting to server...</b> Please wait a moment for data.")
     else:
-        # ডাটা পেলে সাথে সাথে প্রথম সিগন্যাল
         latest_issue = latest['issueNumber']
         next_issue = str(int(latest_issue) + 1)
         state.last_period_processed = latest_issue
@@ -280,7 +254,6 @@ async def connect_market(update: Update, context: ContextTypes.DEFAULT_TYPE):
             parse_mode=ParseMode.HTML
         )
 
-    # Start the continuous loop
     context.application.create_task(game_loop(context))
 
 async def stop_bot(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -303,10 +276,8 @@ async def stop_bot(update: Update, context: ContextTypes.DEFAULT_TYPE):
 if __name__ == '__main__':
     keep_alive()
     application = Application.builder().token(BOT_TOKEN).build()
-    
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("off", stop_bot))
     application.add_handler(MessageHandler(filters.Regex(r'Connect'), connect_market))
-    
     print("Maruf AI is Live...")
     application.run_polling()
