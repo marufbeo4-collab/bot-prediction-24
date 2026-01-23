@@ -1,472 +1,275 @@
-import asyncio
+Import asyncio
+
 import logging
+
 import random
+
 import requests
+
 import time
+
 import os
-import csv
-import io
+
 from threading import Thread
+
 from telegram import Update, ReplyKeyboardMarkup, ReplyKeyboardRemove
+
 from telegram.constants import ParseMode
+
 from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandler, filters
+
 from flask import Flask
 
-# ================= CONFIGURATION =================
-BOT_TOKEN = "8595453345:AAGndyFZES2qZL37LRc3CeqGxKyWq7HeTxk"
-TARGET_CHANNEL = -1003293007059
-BRAND_NAME = "👑 𝐃𝐊 𝐌𝐀𝐑𝐔𝐅 𝐕𝐈𝐏 𝐒𝐘𝐒𝐓𝐄𝐌 👑"
 
-# GOOGLE SHEET PASSWORD SETUP
-SHEET_ID = "1foCsja-2HRi8HHjnMP8CyheaLOwk-ZiJ7a5uqs9khvo"
-SHEET_URL = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/export?format=csv"
 
-# ================= STICKER DATABASE (FULL) =================
+================= CONFIGURATION =================
+
+
+
+BOT_TOKEN = "8534138943:AAHvIRzDybgZz8Vu2AA935BSvDzsXT4TDR0" # <--- আপনার টোকেন
+
+TARGET_CHANNEL = -1003293007059 # <--- আপনার চ্যানেল আইডি
+
+BRAND_NAME = "DK MARUF VIP SYSTEM" # <--- মারুফ ব্র্যান্ডিং
+
+
+
+================= STICKER DATABASE =================
+
+
+
 STICKERS = {
-    'START': [
-        "CAACAgUAAxkBAAEQTjJpcmWOexDHyK90IXQU5Qzo18uBKAACwxMAAlD6QFRRMClp8Q4JAAE4BA",
-        "CAACAgUAAxkBAAEQT_lpc4EvleS6GJIogvkFzlcAAV6T7PsAArYaAAIOJIBV6qeBrzw1_oc4BA",
-        "CAACAgUAAxkBAAEQTuRpczxpKCooU6JW2F53jWSEr7SZnQACZBUAAtEWOFcRzggHRna-EzgE"
-    ],
-    'STOP': [
-        "CAACAgUAAxkBAAEQTudpczxpoCLQ2pIXCqANpddRbHX9ngACKhYAAoBTMVfQP_QoToLXkzgE",
-        "CAACAgUAAxkBAAEQT_dpc4Eqt5r28E8WwxaZnW8X2t58RQACsw8AAoV9CFW0IyDz2PAL5DgE",
-        "CAACAgUAAxkBAAEQThhpcmTQoyChKDDt5k4zJRpKMpPzxwACqxsAAheUwFUano7QrNeU_jgE",
-        "CAACAgUAAxkBAAEQUDRpc4VJP7cgZhVHhqzQsiV3hNLI5wACCQ4AAk9o-VW3jbWfWUVQrjgE"
-    ],
-    'PRED_1M_BIG': ["CAACAgUAAxkBAAEQTr5pcwrBGAZ5xLp_AUAFWSiWiS0rOwAC4R0AAg7MoFcKItGd1m2CsjgE"],
-    'PRED_1M_SMALL': ["CAACAgUAAxkBAAEQTr9pcwrC7iH-Ei5xHz2QapE-DFkgLQACXxkAAoNWmFeTSY6h7y7VlzgE"],
-    'PRED_30S_BIG': ["CAACAgUAAxkBAAEQTuVpczxpbSG9e1hL9__qlNP1gBnIsQAC-RQAAmC3GVT5I4duiXGKpzgE"],
-    'PRED_30S_SMALL': ["CAACAgUAAxkBAAEQTuZpczxpS6btJ7B4he4btOzGXKbXWwAC2RMAAkYqGFTKz4vHebETgDgE"],
-    
-    'WIN_BIG': ["CAACAgUAAxkBAAEQTjhpcmXknd41yv99at8qxdgw3ivEkAACyRUAAraKsFSky2Ut1kt-hjgE"],
-    'WIN_SMALL': ["CAACAgUAAxkBAAEQTjlpcmXkF8R0bNj0jb1Xd8NF-kaTSQAC7DQAAhnRsVTS3-Z8tj-kajgE"],
-    
-    'WIN_GENERAL': [
-        "CAACAgUAAxkBAAEQTydpcz9Kv1L2PJyNlbkcZpcztKKxfQACDRsAAoq1mFcAAYLsJ33TdUA4BA",
-        "CAACAgUAAxkBAAEQTzNpcz9ns8rx_5xmxk4HHQOJY2uUQQAC3RoAAuCpcFbMKj0VkxPOdTgE",
-        "CAACAgUAAxkBAAEQTzRpcz9ni_I4CjwFZ3iSt4xiXxFgkwACkxgAAnQKcVYHd8IiRqfBXTgE",
-        "CAACAgUAAxkBAAEQTx9pcz8GryuxGBMFtzRNRbiCTg9M8wAC5xYAAkN_QFWgd5zOh81JGDgE",
-        "CAACAgUAAxkBAAEQT_tpc4E3AxHmgW9VWKrzWjxlrvzSowACghkAAlbXcFWxdto6TqiBrzgE",
-        "CAACAgUAAxkBAAEQT_9pc4FHKn0W6ZfWOSaN6FUPzfmbnQACXR0AAqMbMFc-_4DHWbq7sjgE",
-        "CAACAgUAAxkBAAEQUAFpc4FIokHE09p165cCsWiUYV648wACuhQAAo3aMVeAsNW9VRuVvzgE",
-        "CAACAgUAAxkBAAEQUANpc4FJNTnfuBiLe-dVtoNCf3CQlAAC9xcAArE-MFfS5HNyds2tWTgE",
-        "CAACAgUAAxkBAAEQUAVpc4FKhJ_stZ3VRRzWUuJGaWbrAgACOhYAAst6OVehdeQEGZlXiDgE",
-        "CAACAgUAAxkBAAEQUAtpc4HcYxkscyRY2rhAAcmqMR29eAACOBYAAh7fwVU5Xy399k3oFDgE",
-        "CAACAgUAAxkBAAEQUCdpc4IuoaqPZ-5vn2RTlJZ_kbeXHQACXRUAAgln-FQ8iTzzJg_GLzgE"
-    ],
-    'LOSS': [
-        "CAACAgUAAxkBAAEQTytpcz9VQoHyZ5ClbKSqKCJbpqX6yQACahYAAl1wAAFUL9xOdyh8UL84BA",
-        "CAACAgUAAxkBAAEQTcVpclMOQ7uFjrUs9ss15ij7rKBj9AACsB0AAobyqFV1rI6qlIIdeTgE"
-    ],
-    'COLOR_RED': ["CAACAgUAAxkBAAEQUClpc4JDd9n_ZQ45hPk-a3tEjFXnugACbhgAAqItoVd2zRs4VkXOHDgE"],
-    'COLOR_GREEN': ["CAACAgUAAxkBAAEQUCppc4JDHWjTzBCFIOx2Hcjtz9UnnAACzRwAAnR3oVejA9DVGekyYTgE"],
-    
-    # Random Win Stickers
-    'WIN_STREAK': [
-        "CAACAgUAAxkBAAEQUA1pc4IKjtrvSWe2ssLEqZ88cAABYW8AAsoiAALegIlVctTV3Pqbjmg4BA",
-        "CAACAgUAAxkBAAEQUA5pc4IKOY43Rh4dwtmmwOC55ikPbQAClRkAAgWviFVWRlQ-8i4rHTgE",
-        "CAACAgUAAxkBAAEQUA9pc4IL7ALl7rMzh_MNMtRQ7DlLHAACihoAAkI4iFVaqQABGzm-T_Q4BA",
-        "CAACAgUAAxkBAAEQUBFpc4ILdPG1eK5pNvXmFC_0vOHp_AACFRsAAr9_iVW18_WchrZ20zgE",
-        "CAACAgUAAxkBAAEQUBJpc4IMZqQnZDPs37vLnP3b_J_IewACjhcAAu1YiFVA_VudovtxjDgE",
-        "CAACAgUAAxkBAAEQUBRpc4IMQdH7-Ykn95YFoVlYeUhDBAACCxwAAhFLiVUYVv2JfG18AzgE",
-        "CAACAgUAAxkBAAEQUBVpc4INgqONigHjBaf9YBYco3kTEwACjBoAAv3AkVUti2I8W2Nq1zgE",
-        "CAACAgUAAxkBAAEQUBdpc4INimNkAAHp-GukssM5EUr3778AAq0aAALqAAGQVZdyE0WiCx4COAQ",
-        "CAACAgUAAxkBAAEQUBhpc4IOn5oxT8qW8r-aqEGsetWZPQACTxcAAjRYiFUHjTokMOpClDgE",
-        "CAACAgUAAxkBAAEQUBppc4IOZeCvBnaSTuKP2h4oTnj0fgACBBUAAlWakFUxHw3S0vZcfTgE",
-        "CAACAgUAAxkBAAEQUBxpc4IPa3350tYXUf26d_Nviy8cywACCxYAAsUKkVVwb6huI3B2YzgE",
-        "CAACAgUAAxkBAAEQUB1pc4IPfU_gZ6Qys4uCXUlXYmc5UwACKBgAAszSmVWaSI27doSUwTgE",
-        "CAACAgUAAxkBAAEQUB9pc4IQMZ9syz2Fdb0qs1aaDhCLQwACJRkAAgvLmVWJ3q_PV1jr0DgE",
-        "CAACAgUAAxkBAAEQTv9pcz6SkXdRsH5TsWOPBwN5F56-8wACoBAAAlfqcVUdJ4kalERlTTgE",
-        "CAACAgUAAxkBAAEQTwABaXM-k7qfRUzUN78zyPXMs3Hhh4wAAh0TAAL2hWhV3RpXRX1cd8g4BA",
-        "CAACAgUAAxkBAAEQTwJpcz6TPM36pjrzC8F-anJNnJbqTgACkBIAAtAqkFUWFLLSNNGZfDgE",
-        "CAACAgUAAxkBAAEQTwZpcz6VYJ-aVbWHOsZJcpavAdXdMAACKBcAAqoXkVXuWgWwBVusNzgE",
-        "CAACAgUAAxkBAAEQTwdpcz6VCusuBhcO2wezUqQknqHaBwACthAAAnnrmFWsePzzB00VNzgE",
-        "CAACAgUAAxkBAAEQTwlpcz6VONfhZHHu-8tlEJwsOyRNzQACJBEAAmaYkVUu37wFysjR-zgE",
-        "CAACAgUAAxkBAAEQTwppcz6WSrm6csgBEyTMYXRfwnpSkQACJxIAAiaykVVCqfU3OG6ECzgE",
-        "CAACAgUAAxkBAAEQTwxpcz6WH4uAKaqfS0fvPSdXjLYhswACzxIAAjDdkFW6aCxiX9iZcTgE",
-        "CAACAgUAAxkBAAEQTw1pcz6XDQV4XA8wuV0sfPBUd3yMbwACpBAAAlymkFUBzAElsldCQDgE",
-        "CAACAgUAAxkBAAEQTw9pcz6XS2m2gEzWEaFrOPBG5g7XVgACXBAAAnnpmFUkULPqb9CWtjgE",
-        "CAACAgUAAxkBAAEQTxBpcz6Xl8JEaRiElynIt96QIFFhLgAC1RAAAppZmFUhqvAIRJFOiTgE",
-        "CAACAgUAAxkBAAEQTztpcz9zv_PJ_ueievAwdQ4NbhqQeAAChRQAAg02oFQY_rjzLxHMojgE",
-        "CAACAgUAAxkBAAEQTzxpcz9zpYuLtX5kDf0WceGoQLmG3gACBBYAAsaqqFTdGFSRXI6vaTgE",
-        "CAACAgUAAxkBAAEQTz1pcz9zGy6W5h2FOPRz7bBeQCpzEQAC6RcAArONqVSSKCuWYSwjQjgE",
-        "CAACAgUAAxkBAAEQTz9pcz90RLnLD8caB_a9asYM2l_B2QACHhMAAhkFqFRPB9QzOV2bKjgE",
-        "CAACAgUAAxkBAAEQT0Bpcz90rHd8Yoee2wwVIZ_UB0owRwACIRUAAstUqVQpHOftLWUOtDgE",
-        "CAACAgUAAxkBAAEQT0Fpcz90nR-Q4OYgaejY9deU_TGEIgACmBcAAvbxqVT9ldxH8UG7uzgE",
-        "CAACAgUAAxkBAAEQT0Npcz91CcAHS5r80hjuJQGqEBAwCwACjxcAAi4XqFSuMY65BKYvLzgE",
-        "CAACAgUAAxkBAAEQT0Rpcz91yp7HSIBW2HiW4nzohLuw3gACWRQAArGMqVS2zthdR-Vk2jgE",
-        "CAACAgUAAxkBAAEQT0Vpcz91QWr__pgcauKrt3c2xMfSVQACpBgAAoAkqFReTfwQgeVnWDgE",
-        "CAACAgUAAxkBAAEQT0dpcz92q8K-y5nRFNh_6nsQAAEFHLAAArEUAALJi6hU2bdLLAxDgjI4BA",
-        "CAACAgUAAxkBAAEQT0ppcz93sao2kKvVsAenpBBc1aStVwACHhQAAqu-qVSq2PMotKpprzgE",
-        "CAACAgUAAxkBAAEQT0tpcz93yMPGJWw7TuHS06q5Yo4bIQACeRkAAsoKqFSyigb3qn0s_zgE",
-        "CAACAgUAAxkBAAEQT0xpcz948D3tEwQ7LiRJrcRM9dxHOAACTBcAAuiaqVQENM6GYLRBfDgE",
-        "CAACAgUAAxkBAAEQT05pcz94_yo-pxTTMrdRKykqgbuH-AACTBcAAmREqFT8HkngFhkhxjgE",
-        "CAACAgUAAxkBAAEQT09pcz95XZlIT0eGLYAenXxnla9MHwACFBQAAlyJqVQ3XE8tNzPpHzgE",
-        "CAACAgUAAxkBAAEQT1Bpcz95PA9gYdsd0MhbVYaJ-ZFoMAAC5xcAAkA_qFTbijW8ShcgjDgE",
-        "CAACAgUAAxkBAAEQT1Jpcz959UnfHm81_CH1HbBBJ95AFAACJRMAAqSIqFTl_pga7Kor6TgE",
-        "CAACAgUAAxkBAAEQT1Npcz95PVsNzLbtPElnMPJB2Va97wAC1BYAAov1sVRtAAFZPASO5PY4BA",
-        "CAACAgUAAxkBAAEQT1Vpcz96O_xO-VVsBd_XV6-pQXm3jQACGxoAApRZsVSNqC8hjf3-eDgE",
-        "CAACAgUAAxkBAAEQT1Zpcz960TnGJKxgi10057NTg5HWuQACHxcAAnQ1qFTPcjLI8e9OczgE",
-        "CAACAgUAAxkBAAEQT1hpcz97G85sX5ySXv1M_jECy_EtqQAC8BUAApODqFT3JZAuNhbmNTgE",
-        "CAACAgUAAxkBAAEQT1lpcz97O2iT3Yl9W0KFNCTH7qiXQgACgBYAAuEXqVRZv2dpS4EHVzgE",
-        "CAACAgUAAxkBAAEQT1tpcz98Im8mVQiU8h6VpXVR3IRsEwACPxEAAhyVsFR8ZRkxStM63zgE",
-        "CAACAgUAAxkBAAEQT1xpcz98euWdB8zjPgek_0BAMb1PvQACmhYAAhAisVScH1YlQyt9yjgE",
-        "CAACAgUAAxkBAAEQT15pcz998PBuw95G3z0F9cGxuhUVNwACwTMAAtAnqFSybAeoJwzLpjgE",
-        "CAACAgUAAxkBAAEQT2Fpcz9-07-taN3PU02zrxQVUR3wTAACAxcAAv9JsVSml6JIBLJVGzgE",
-        "CAACAgUAAxkBAAEQT2Jpcz9-97fthHAYG1amMYmLF7gbugACaBQAAuo8sVQwK__LE8DLBDgE",
-        "CAACAgUAAxkBAAEQT2Rpcz9_XMk45yJwd41fbHZke9YhBAACPBkAAp0msFR8Qew-_bTkvTgE",
-        "CAACAgUAAxkBAAEQT2Vpcz-AViRGFS-q7xgOPCdbx8i1owACPhYAAnFBsVQltR3HtL0kPTgE",
-        "CAACAgUAAxkBAAEQT2dpcz-A5zw2-WipUm2kLN24tkjKlwACCRYAAgcssFQZImH_k4AO-jgE",
-        "CAACAgUAAxkBAAEQT2hpcz-AKbPVKenz3IYudJb7KpOgiwACQBgAApX3qFTnQzEOrm3CCjgE",
-        "CAACAgUAAxkBAAEQT2lpcz-AhNicVAKKm7G1Iqyr_WzniwACaBIAApOXsVRFkKpCG-aXZDgE",
-        "CAACAgUAAxkBAAEQT2tpcz-BjTLpfq9UckX4vCSNN--DNAAC1hIAAj23sVS8mXaCwOIMtzgE",
-        "CAACAgUAAxkBAAEQT2xpcz-BCi30UnuDynTD13MPS8uRFAACdBoAAsfYsFTYdYGV6ifnnjgE",
-        "CAACAgUAAxkBAAEQT25pcz-BVnIngR6hUhCqH3AqetvxVgACAhUAAoaYsFT_eqDmpnebRzgE",
-        "CAACAgUAAxkBAAEQT29pcz-Cn9ET9ouZh1vQOgP_5kXhJQACPBQAAtCgqFQ0gy-VPXbzpTgE",
-        "CAACAgUAAxkBAAEQT3Fpcz-DsjPeRnkxr-mi8aGDXWo0OQACrhkAAmqcsFQVxXvNiEdCAAE4BA",
-        "CAACAgUAAxkBAAEQT3Jpcz-DqXkc0GewJuXx4-eEFJnCFQACGRUAAnnjqFTQoz7jnV1eNzgE",
-        "CAACAgUAAxkBAAEQT3Rpcz-Dt8e-P9wCdFV0GUk8OC4zCgACYRUAAncBsVSkNVeXzCnqbzgE",
-        "CAACAgUAAxkBAAEQT3Vpcz-EC433LL7rYbDnmQhQNTUJkgACBx4AAtyRsVS-3z6RD8x45jgE",
-        "CAACAgUAAxkBAAEQT3dpcz-EN3M9gQhjYyVnAAESH56S77gAAsgSAAJS6bhUU_mpQpSnlp44BA",
-        "CAACAgUAAxkBAAEQT3hpcz-EjQ_Rjda0kHragEYCd2mhvQACWBkAAgRxsVQxbUPdu_J53zgE",
-        "CAACAgUAAxkBAAEQT3lpcz-FLsH2LpadGa4wab1rfdYWHAACBh4AAuufsFQ_sbI3GX1f-zgE",
-        "CAACAgUAAxkBAAEQT3tpcz-FOFok1_f9BM76zXkIKiItngACJxcAAmz9sVSXckkejrlmzzgE",
-        "CAACAgUAAxkBAAEQT3xpcz-FI0QW_DbxFlGsfL3f-1Cv1QACqhoAAlbbsVSshO5rtPrgtjgE",
-        "CAACAgUAAxkBAAEQT35pcz-GyMT2c5fhD3r_IPiaMD1TsAAC5xQAAl318VT0PIj_HCpCnDgE",
-        "CAACAgUAAxkBAAEQT4Bpcz-HKSNXK5rTEEKOIhn8buAIbwAC6RMAArTp8VTLcfmXf2Q8KzgE",
-        "CAACAgUAAxkBAAEQT4Fpcz-HbU4hK4ss9Scmla-xDNty7wACjxcAAnI58FSZxsexzKkdOjgE",
-        "CAACAgUAAxkBAAEQT4Jpcz-HmSz-kMUu98g26mcyjouCDAACEBMAAkKW8FQeRaxT0Zg2JjgE",
-        "CAACAgUAAxkBAAEQT4Rpcz-IHEcnQm0Kf6-No4vjSYOS0gACwRQAAsj78VQmpjYqBUGXrjgE",
-        "CAACAgUAAxkBAAEQUDZpc4VMJx694uE09-ZWlks_anzAvAACXBsAAv4b-FXj9l4eQ-g5-jgE",
-        "CAACAgUAAxkBAAEQUDhpc4VM6rq1VbSAPaCdCeaR0eReHwACAhIAAkEj8VWFHkUbgA0-njgE"
-    ]
+
+'BIG_PRED': "CAACAgUAAxkBAAEQThJpcmSl40i0bvVSOxcDpVmqqeuqWQACySIAAlAYqVXUubH8axJhFzgE",
+
+'SMALL_PRED': "CAACAgUAAxkBAAEQThZpcmTJ3JsaZHTYtVIcE4YEFuXDFgAC9BoAApWhsVWD2IhYoJfTkzgE",
+
+'WIN_BIG': "CAACAgUAAxkBAAEQTjhpcmXknd41yv99at8qxdgw3ivEkAACyRUAAraKsFSky2Ut1kt-hjgE",
+
+'WIN_SMALL': "CAACAgUAAxkBAAEQTjlpcmXkF8R0bNj0jb1Xd8NF-kaTSQAC7DQAAhnRsVTS3-Z8tj-kajgE",
+
+'LOSS': [
+
+"CAACAgUAAxkBAAEQTcVpclMOQ7uFjrUs9ss15ij7rKBj9AACsB0AAobyqFV1rI6qlIIdeTgE",
+
+"CAACAgUAAxkBAAEQTh5pcmTbrSEe58RRXvtu_uwEAWZoQQAC5BEAArgxYVUhMlnBGKmcbzgE"
+
+],
+
+'STREAK_WINS': {
+
+2: "CAACAgUAAxkBAAEQTiBpcmUfm9aQmlIHtPKiG2nE2e6EeAACcRMAAiLWqFSpdxWmKJ1TXzgE",
+
+3: "CAACAgUAAxkBAAEQTiFpcmUgdgJQ_czeoFyRhNZiZI2lwwAC8BcAAv8UqFSVBQEdUW48HTgE",
+
+4: "CAACAgUAAxkBAAEQTiJpcmUgSydN-tKxoSVdFuAvCcJ3fQACvSEAApMRqFQoUYBnH5Pc7TgE",
+
+5: "CAACAgUAAxkBAAEQTiNpcmUgu_dP3wKT2k94EJCiw3u52QACihoAArkfqFSlrldtXbLGGDgE",
+
+6: "CAACAgUAAxkBAAEQTiRpcmUhQJUjd2ukdtfEtBjwtMH4MAACWRgAAsTFqVTato0SmSN-6jgE",
+
+7: "CAACAgUAAxkBAAEQTiVpcmUhha9HAAF19fboYayfUrm3tdYAAioXAAIHgKhUD0QmGyF5Aug4BA",
+
+8: "CAACAgUAAxkBAAEQTixpcmUmevnNEqUbr0qbbVgW4psMNQACMxUAAow-qFSnSz4Ik1ddNzgE",
+
+9: "CAACAgUAAxkBAAEQTi1pcmUmpSxAHo2pvR-GjCPTmkLr0AACLh0AAhCRqFRH5-2YyZKq1jgE",
+
+10: "CAACAgUAAxkBAAEQTi5pcmUmjmjp7oXg4InxI1dGYruxDwACqBgAAh19qVT6X_-oEywCkzgE"
+
+},
+
+'START': "CAACAgUAAxkBAAEQTjJpcmWOexDHyK90IXQU5Qzo18uBKAACwxMAAlD6QFRRMClp8Q4JAAE4BA"
+
 }
 
-# API LINKS
+
+
+API LINKS
+
+
+
 API_1M = "https://draw.ar-lottery01.com/WinGo/WinGo_1M/GetHistoryIssuePage.json"
+
 API_30S = "https://draw.ar-lottery01.com/WinGo/WinGo_30S/GetHistoryIssuePage.json"
 
-# ================= FLASK SERVER =================
+
+
+================= FLASK SERVER (24/7 FIX) =================
+
+
+
 app = Flask('')
 
+
+
 @app.route('/')
+
 def home():
-    return "DK MARUF VIP SYSTEM RUNNING..."
+
+return "DK MARUF ENGINE RUNNING..."
+
+
 
 def run_http():
-    port = int(os.environ.get("PORT", 8080))
-    try: app.run(host='0.0.0.0', port=port)
-    except: pass
+
+# পোর্ট ফিক্স যাতে সার্ভার বন্ধ না করে দেয়
+
+port = int(os.environ.get("PORT", 8080))
+
+try:
+
+app.run(host='0.0.0.0', port=port)
+
+except: pass
+
+
 
 def keep_alive():
-    t = Thread(target=run_http)
-    t.start()
 
-# ================= HELPER FUNCTIONS =================
-def get_sheet_password():
-    """Google Sheet থেকে পাসওয়ার্ড নিবে"""
-    try:
-        response = requests.get(SHEET_URL, timeout=5)
-        if response.status_code == 200:
-            csv_data = csv.reader(io.StringIO(response.text))
-            rows = list(csv_data)
-            if rows and rows[0]:
-                return rows[0][0].strip()
-    except Exception as e:
-        print(f"Sheet Error: {e}")
-    return "admin123"
+t = Thread(target=run_http)
 
-def get_random_sticker(category_list):
-    if not category_list: return None
-    return random.choice(category_list)
+t.start()
 
-def generate_fake_summary(real_wins, real_loss):
-    fake_wins = real_wins + random.randint(5, 12)
-    fake_streak = random.randint(7, 15)
-    profit = (fake_wins * 1000) - (real_loss * 1000) + random.randint(500, 5000)
-    return fake_wins, fake_streak, profit
 
-# ================= PREDICTION ENGINE =================
+
+================= BIG COMMUNITY LOGIC (INTEGRATED) =================
+
+
+
 class PredictionEngine:
-    def __init__(self):
-        self.history = [] 
-        self.raw_history = []
-    
-    def update_history(self, issue_data):
-        number = int(issue_data['number'])
-        result_type = "BIG" if number >= 5 else "SMALL"
-        
-        if not self.history or self.raw_history[0]['issueNumber'] != issue_data['issueNumber']:
-            self.history.insert(0, result_type)
-            self.raw_history.insert(0, issue_data)
-            self.history = self.history[:50] 
-            self.raw_history = self.raw_history[:50]
 
-    def get_pattern_signal(self, current_streak_loss):
-        if len(self.history) < 6: return random.choice(["BIG", "SMALL"])
-        last_6 = self.history[:6]
-        
-        if last_6[0] == last_6[1] == last_6[2]: prediction = last_6[0] 
-        elif last_6[0] != last_6[1] and last_6[1] != last_6[2]: prediction = "SMALL" if last_6[0] == "BIG" else "BIG"
-        else:
-            last_num = int(self.raw_history[0]['number'])
-            period_digit = int(str(self.raw_history[0]['issueNumber'])[-1])
-            prediction = "BIG" if ((last_num + period_digit) % 2) == 1 else "SMALL"
+def init(self):
 
-        if current_streak_loss >= 2:
-            return "SMALL" if prediction == "BIG" else "BIG"
-        
-        return prediction
+self.history = []
 
-# ================= BOT STATE =================
+self.raw_history = []
+
+
+
+def update_history(self, issue_data): number = int(issue_data['number']) result_type = "BIG" if number >= 5 else "SMALL" if not self.history or self.raw_history[0]['issueNumber'] != issue_data['issueNumber']: self.history.insert(0, result_type) self.raw_history.insert(0, issue_data) self.history = self.history[:50] self.raw_history = self.raw_history[:50] def get_pattern_signal(self): # === BIG COMMUNITY LOGIC IMPLEMENTATION === if len(self.history) < 6: return random.choice(["BIG", "SMALL"]) last_6 = self.history[:6] # 1. Dragon Pattern (টানা ৩ বার একই) -> Trend Follow if last_6[0] == last_6[1] == last_6[2]: return last_6[0] # 2. ZigZag Pattern (1-1-1) -> Alternate if last_6[0] != last_6[1] and last_6[1] != last_6[2]: # জিগজ্যাগ চললে প্যাটার্ন বজায় রাখবে return "SMALL" if last_6[0] == "BIG" else "BIG" # 3. AABB Pattern (Two-Two) -> Pattern Break if last_6[0] == last_6[1] and last_6[2] == last_6[3] and last_6[1] != last_6[2]: # AABB শেষ হলে সাধারণত জিগজ্যাগ শুরু হয় return "SMALL" if last_6[0] == "BIG" else "BIG" # 4. Default -> Trend Majority big_count = last_6.count("BIG") return "BIG" if big_count >= 3 else "SMALL" def calculate_confidence(self): return random.randint(90, 99)
+
+
+
+================= BOT STATE =================
+
+
+
 class BotState:
-    def __init__(self):
-        self.is_running = False
-        self.game_mode = '1M'
-        self.color_mode = False 
-        self.password_verified = False
-        self.engine = PredictionEngine()
-        self.active_bet = None
-        self.last_period_processed = None
-        self.stats = {"wins": 0, "losses": 0, "streak_win": 0, "streak_loss": 0}
+
+def init(self):
+
+self.is_running = False
+
+self.game_mode = '1M'
+
+self.engine = PredictionEngine()
+
+self.active_bet = None
+
+self.last_period_processed = None
+
+self.stats = {"wins": 0, "losses": 0, "streak_win": 0, "streak_loss": 0}
+
+
 
 state = BotState()
 
-# ================= ROBUST API FETCH =================
+
+
+================= API FETCH (ROBUST) =================
+
+
+
 def fetch_latest_issue(mode):
-    base_url = API_1M if mode == '1M' else API_30S
-    proxies = [
-        f"{base_url}?t={int(time.time()*1000)}", 
-        f"https://corsproxy.io/?{base_url}?t={int(time.time()*1000)}", 
-        f"https://api.allorigins.win/raw?url={base_url}",
-        f"https://thingproxy.freeboard.io/fetch/{base_url}",
-        f"https://api.codetabs.com/v1/proxy?quest={base_url}"
-    ]
-    
-    headers = {
-        "User-Agent": f"Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/{random.randint(100, 120)}.0.0.0 Safari/537.36",
-        "Referer": "https://dkwin9.com/"
-    }
 
-    for url in proxies:
-        try:
-            response = requests.get(url, headers=headers, timeout=5)
-            if response.status_code == 200:
-                data = response.json()
-                if data and "data" in data and "list" in data["data"]:
-                    return data["data"]["list"][0]
-        except: continue
-    return None
+base_url = API_1M if mode == '1M' else API_30S
 
-# ================= FORMATTING (SAFE HTML) =================
-def format_signal(issue, prediction, conf, streak_loss, show_color):
-    emoji = "🟢" if prediction == "BIG" else "🔴"
-    
-    lvl = streak_loss + 1
-    multipliers = [1, 3, 9, 27, 81, 243, 729, 2187] 
-    amount_x = multipliers[lvl-1] if lvl <= 8 else "MAX"
-    
-    plan_text = f"⚡ <b>LEVEL {lvl} - BET {amount_x}X</b>"
-    if lvl == 1: plan_text = "🟢 <b>START INVESTMENT (1X)</b>"
-    if lvl >= 7: plan_text = f"🔥 <b>DO OR DIE - LEVEL {lvl} ({amount_x}X)</b>"
 
-    color_text = ""
-    if show_color:
-        c_emoji = "🟩" if prediction == "BIG" else "🟥"
-        color_text = f"🎨 <b>COLOR:</b> {prediction} {c_emoji}\n"
 
-    return (
-        f"💎 <b>{BRAND_NAME}</b> 💎\n"
-        f"➖➖➖➖➖➖➖➖➖➖\n"
-        f"🎲 <b>PREDICTION TIME</b>\n"
-        f"🆔 <b>PERIOD:</b> <code>{issue}</code>\n"
-        f"📊 <b>SIGNAL:</b> ▶️ <b>{prediction}</b> ◀️\n"
-        f"{color_text}"
-        f"🎯 <b>CONFIDENCE:</b> {conf}%\n"
-        f"💰 <b>STRATEGY:</b> {plan_text}\n"
-        f"➖➖➖➖➖➖➖➖➖➖\n"
-        f"👑 <b>OWNER:</b> @OWNER_MARUF_TOP"
-    )
+proxies = [ f"{base_url}?t={int(time.time()*1000)}", f"https://corsproxy.io/?{base_url}?t={int(time.time()*1000)}", f"https://api.allorigins.win/raw?url={base_url}", f"https://thingproxy.freeboard.io/fetch/{base_url}", f"https://api.codetabs.com/v1/proxy?quest={base_url}" ] headers = { "User-Agent": f"Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/{random.randint(100, 120)}.0.0.0 Safari/537.36", "Referer": "https://dkwin9.com/", "Origin": "https://dkwin9.com" } for url in proxies: try: response = requests.get(url, headers=headers, timeout=5) if response.status_code == 200: data = response.json() if data and "data" in data and "list" in data["data"]: return data["data"]["list"][0] except: continue return None
+
+
+
+================= FORMATTING (DK MARUF STYLE) =================
+
+
+
+def format_signal(issue, prediction, conf, streak_loss):
+
+emoji = "🟢" if prediction == "BIG" else "🔴"
+
+color = "GREEN" if prediction == "BIG" else "RED"
+
+
+
+lvl = streak_loss + 1 multiplier = 3 ** (lvl - 1) # 1, 3, 9... plan_text = f"Start (1X)" if lvl > 1: plan_text = f"⚠️ Recovery Step {lvl} ({multiplier}X)" if lvl > 4: plan_text = f"🔥 DO OR DIE ({multiplier}X)" return ( f"🛡 <b>{BRAND_NAME}</b> 🛡\n" f"➖➖➖➖➖➖➖➖➖➖\n" f"📊 <b>Market:</b> {state.game_mode} VIP\n" f"🆔 <b>Period:</b> <code>{issue}</code>\n" f"➖➖➖➖➖➖➖➖➖➖\n" f"🔥 <b>SIGNAL:</b> 👉 <b>{prediction}</b> 👈\n" f"🎨 <b>Color:</b> {color} {emoji}\n" f"🚀 <b>Confidence:</b> {conf}%\n" f"➖➖➖➖➖➖➖➖➖➖\n" f"💰 <b>Plan:</b> {plan_text}\n" f"⚡ <b>Maintain 5 Level Funds!</b>\n" f"👑 <b>Dev:</b> @dk_mentor_maruf_official" )
+
+
 
 def format_result(issue, res_num, res_type, my_pick, is_win):
-    res_emoji = "🟢" if res_type == "BIG" else "🔴"
-    if int(res_num) in [0, 5]: res_emoji = "🟣"
-    
-    if is_win:
-        header = "🎉 <b>BOOM! WINNER!</b> 🎉"
-        status = "✅ <b>PROFIT ADDED</b>"
-    else:
-        header = "❌ <b>LOSS - NEXT LEVEL</b> ❌"
-        status = "⚠️ <b>PREPARE FOR RECOVERY</b>"
 
-    return (
-        f"{header}\n"
-        f"🆔 <b>PERIOD:</b> <code>{issue}</code>\n"
-        f"🔢 <b>RESULT:</b> {res_emoji} {res_num} ({res_type})\n"
-        f"🙋 <b>MY PICK:</b> {my_pick}\n"
-        f"➖➖➖➖➖➖➖➖➖➖\n"
-        f"{status}\n"
-        f"📶 <b>System by DK Maruf</b>"
-    )
+res_emoji = "🟢" if res_type == "BIG" else "🔴"
 
-# ================= ENGINE LOOP =================
+if int(res_num) in [0, 5]: res_emoji = "🟣"
+
+
+
+if is_win: w_streak = state.stats['streak_win'] header = f"🎉 <b>BOOM! WINNER!</b> 🎉" status = f"🔥 <b>Win Streak: {w_streak}</b> 🔥" else: header = f"❌ <b>LOSS / MISS</b> ❌" next_step = state.stats['streak_loss'] + 1 status = f"⚠️ <b>Go For Step {next_step} Recovery</b>" return ( f"{header}\n" f"🆔 <b>Period:</b> <code>{issue}</code>\n" f"🎲 <b>Result:</b> {res_emoji} {res_num} ({res_type})\n" f"🎯 <b>My Pick:</b> {my_pick}\n" f"➖➖➖➖➖➖➖➖➖➖\n" f"{status}\n" f"📶 <b>System by DK Maruf</b>" )
+
+
+
+================= 24/7 AUTO-RESTART ENGINE =================
+
+
+
 async def game_engine(context: ContextTypes.DEFAULT_TYPE):
-    print("🚀 Engine Started...")
-    
-    while state.is_running:
-        try:
-            # 8-Step Auto Stop
-            if state.stats['streak_loss'] >= 8:
-                state.is_running = False
-                await context.bot.send_message(TARGET_CHANNEL, "⛔ <b>MAX LEVEL HIT - STOPPING</b>", parse_mode=ParseMode.HTML)
-                return
 
-            # 1. Fetch
-            latest = fetch_latest_issue(state.game_mode)
-            if not latest:
-                print("⚠️ API Fetch Failed - Retrying...")
-                await asyncio.sleep(3)
-                continue
-                
-            latest_issue = latest['issueNumber']
-            latest_num = latest['number']
-            latest_type = "BIG" if int(latest_num) >= 5 else "SMALL"
-            next_issue = str(int(latest_issue) + 1)
-            
-            # 2. Process Result
-            if state.active_bet and state.active_bet['period'] == latest_issue:
-                pick = state.active_bet['pick']
-                is_win = (pick == latest_type)
-                state.engine.update_history(latest)
-                
-                if is_win:
-                    state.stats['wins'] += 1
-                    state.stats['streak_win'] += 1
-                    state.stats['streak_loss'] = 0
-                    
-                    if state.game_mode == '1M':
-                         stk = STICKERS['WIN_BIG'] if latest_type == "BIG" else STICKERS['WIN_SMALL']
-                    else:
-                         stk = STICKERS['WIN_GENERAL'] + STICKERS['WIN_STREAK']
-                    try: await context.bot.send_sticker(TARGET_CHANNEL, get_random_sticker(stk))
-                    except: pass
-                else:
-                    state.stats['losses'] += 1
-                    state.stats['streak_win'] = 0
-                    state.stats['streak_loss'] += 1
-                    try: await context.bot.send_sticker(TARGET_CHANNEL, get_random_sticker(STICKERS['LOSS']))
-                    except: pass
+print("🚀 DK Maruf Engine (Big Comm. Logic) Started...")
 
-                try:
-                    await context.bot.send_message(
-                        TARGET_CHANNEL,
-                        format_result(latest_issue, latest_num, latest_type, pick, is_win),
-                        parse_mode=ParseMode.HTML,
-                        disable_web_page_preview=True
-                    )
-                except Exception as e: print(f"Res Msg Err: {e}")
-                
-                state.active_bet = None
-                state.last_period_processed = latest_issue
 
-            # 3. New Prediction
-            if not state.active_bet and state.last_period_processed != next_issue:
-                await asyncio.sleep(2)
-                state.engine.update_history(latest)
-                
-                pred = state.engine.get_pattern_signal(state.stats['streak_loss'])
-                conf = random.randint(90, 99)
-                state.active_bet = {"period": next_issue, "pick": pred}
-                
-                # Stickers
-                if state.game_mode == '1M':
-                    s_stk_list = STICKERS['PRED_1M_BIG'] if pred == "BIG" else STICKERS['PRED_1M_SMALL']
-                else:
-                    s_stk_list = STICKERS['PRED_30S_BIG'] if pred == "BIG" else STICKERS['PRED_30S_SMALL']
-                
-                try: await context.bot.send_sticker(TARGET_CHANNEL, get_random_sticker(s_stk_list))
-                except: pass
 
-                if state.color_mode:
-                    c_stk = STICKERS['COLOR_GREEN'] if pred == "BIG" else STICKERS['COLOR_RED']
-                    try: await context.bot.send_sticker(TARGET_CHANNEL, get_random_sticker(c_stk))
-                    except: pass
+while state.is_running: try: # 1. Fetch latest = fetch_latest_issue(state.game_mode) if not latest: await asyncio.sleep(3) continue latest_issue = latest['issueNumber'] latest_num = latest['number'] latest_type = "BIG" if int(latest_num) >= 5 else "SMALL" next_issue = str(int(latest_issue) + 1) # 2. Process Result if state.active_bet and state.active_bet['period'] == latest_issue: pick = state.active_bet['pick'] is_win = (pick == latest_type) state.engine.update_history(latest) if is_win: state.stats['wins'] += 1 state.stats['streak_win'] += 1 state.stats['streak_loss'] = 0 # Sticker Logic streak = state.stats['streak_win'] if streak in STICKERS['STREAK_WINS']: sticker_id = STICKERS['STREAK_WINS'][streak] else: sticker_id = STICKERS['WIN_BIG'] if latest_type == "BIG" else STICKERS['WIN_SMALL'] try: await context.bot.send_sticker(TARGET_CHANNEL, sticker_id) except: pass else: state.stats['losses'] += 1 state.stats['streak_win'] = 0 state.stats['streak_loss'] += 1 try: await context.bot.send_sticker(TARGET_CHANNEL, random.choice(STICKERS['LOSS'])) except: pass # Result Message try: await context.bot.send_message( TARGET_CHANNEL, format_result(latest_issue, latest_num, latest_type, pick, is_win), parse_mode=ParseMode.HTML, disable_web_page_preview=True ) except Exception as e: print(f"Res Err: {e}") state.active_bet = None state.last_period_processed = latest_issue # 3. New Prediction if not state.active_bet and state.last_period_processed != next_issue: await asyncio.sleep(2) state.engine.update_history(latest) # USING BIG COMMUNITY LOGIC HERE pred = state.engine.get_pattern_signal() conf = state.engine.calculate_confidence() state.active_bet = {"period": next_issue, "pick": pred} # Signal Sticker s_stk = STICKERS['BIG_PRED'] if pred == "BIG" else STICKERS['SMALL_PRED'] try: await context.bot.send_sticker(TARGET_CHANNEL, s_stk) except: pass # Signal Msg try: await context.bot.send_message( TARGET_CHANNEL, format_signal(next_issue, pred, conf, state.stats['streak_loss']), parse_mode=ParseMode.HTML, disable_web_page_preview=True ) except Exception as e: print(f"Sig Err: {e}") await asyncio.sleep(2) except Exception as e: print(f"Loop Restarting: {e}") await asyncio.sleep(2) # ক্র্যাশ করলে ২ সেকেন্ড পর অটো রিস্টার্ট হবে
 
-                try:
-                    await context.bot.send_message(
-                        TARGET_CHANNEL,
-                        format_signal(next_issue, pred, conf, state.stats['streak_loss'], state.color_mode),
-                        parse_mode=ParseMode.HTML,
-                        disable_web_page_preview=True
-                    )
-                except Exception as e:
-                    print(f"Sig Msg Err: {e}")
-                    # Fallback if HTML fails
-                    await context.bot.send_message(TARGET_CHANNEL, f"⚠️ Prediction: {pred} (Check Code HTML)")
 
-            await asyncio.sleep(2)
-            
-        except Exception as e:
-            print(f"Loop Err: {e}")
-            await asyncio.sleep(2)
 
-# ================= HANDLERS =================
+================= HANDLERS =================
+
+
+
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    state.password_verified = False
-    await update.message.reply_text("🔒 <b>SECURITY CHECK:</b> Enter Password", parse_mode=ParseMode.HTML)
+
+await update.message.reply_text(
+
+"👋 Welcome Maruf Boss!\nSelect Server:",
+
+reply_markup=ReplyKeyboardMarkup([['⚡ Connect 1M', '⚡ Connect 30S'], ['🛑 Stop']], resize_keyboard=True),
+
+parse_mode=ParseMode.HTML
+
+)
+
+
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    msg = update.message.text
-    
-    if not state.password_verified:
-        if msg.strip() == get_sheet_password():
-            state.password_verified = True
-            await update.message.reply_text(
-                f"✅ <b>WELCOME BOSS</b>",
-                parse_mode=ParseMode.HTML,
-                reply_markup=ReplyKeyboardMarkup([['⚡ 1M VIP', '⚡ 30S VIP'], ['🎨 Color: OFF', '🛑 STOP']], resize_keyboard=True)
-            )
-        else:
-            await update.message.reply_text("❌ Wrong Password!")
-        return
 
-    if "STOP" in msg:
-        state.is_running = False
-        fw, fs, fp = generate_fake_summary(state.stats['wins'], state.stats['losses'])
-        summary = f"📊 <b>SUMMARY</b>\n✅ Wins: {fw}\n🔥 Streak: {fs}\n💵 Profit: +{fp} BDT"
-        await context.bot.send_message(TARGET_CHANNEL, summary, parse_mode=ParseMode.HTML)
-        try: await context.bot.send_sticker(TARGET_CHANNEL, get_random_sticker(STICKERS['STOP']))
-        except: pass
-        await update.message.reply_text("⛔ Stopped.", reply_markup=ReplyKeyboardRemove())
-        state.password_verified = False
+msg = update.message.text
 
-    elif "Color" in msg:
-        state.color_mode = not state.color_mode
-        status = "ON" if state.color_mode else "OFF"
-        kb = [['⚡ 1M VIP', '⚡ 30S VIP'], [f'🎨 Color: {status}', '🛑 STOP']]
-        await update.message.reply_text(f"🎨 Color: {status}", reply_markup=ReplyKeyboardMarkup(kb, resize_keyboard=True))
 
-    elif "VIP" in msg:
-        if state.is_running:
-            await update.message.reply_text("⚠️ Already Running!")
-            return
-        state.game_mode = '1M' if '1M' in msg else '30S'
-        state.is_running = True
-        state.stats = {"wins":0, "losses":0, "streak_win":0, "streak_loss":0}
-        state.engine = PredictionEngine()
-        
-        try: await context.bot.send_sticker(TARGET_CHANNEL, get_random_sticker(STICKERS['START']))
-        except: pass
-        
-        await update.message.reply_text(f"🚀 {state.game_mode} Started!", parse_mode=ParseMode.HTML)
-        context.application.create_task(game_engine(context))
 
-if __name__ == '__main__':
-    keep_alive()
-    app = Application.builder().token(BOT_TOKEN).build()
-    app.add_handler(CommandHandler("start", start))
-    app.add_handler(MessageHandler(filters.TEXT, handle_message))
-    
-    print("👑 DK MARUF SYSTEM LIVE...")
-    app.run_polling(allowed_updates=Update.ALL_TYPES, drop_pending_updates=True)
+if "Stop" in msg: state.is_running = False await update.message.reply_text("⛔ Bot Stopped.") return if "Connect" in msg: if state.is_running: await update.message.reply_text("⚠️ Already Running!") return mode = '1M' if '1M' in msg else '30S' state.game_mode = mode state.is_running = True state.stats = {"wins":0, "losses":0, "streak_win":0, "streak_loss":0} state.engine = PredictionEngine() await update.message.reply_text(f"✅ <b>Connected to {mode}</b>\nWait for signals...", reply_markup=ReplyKeyboardRemove(), parse_mode=ParseMode.HTML) try: await context.bot.send_sticker(TARGET_CHANNEL, STICKERS['START']) except: pass context.application.create_task(game_engine(context))
+
+
+
+if name == 'main':
+
+keep_alive()
+
+app = Application.builder().token(BOT_TOKEN).build()
+
+app.add_handler(CommandHandler("start", start))
+
+app.add_handler(MessageHandler(filters.TEXT, handle_message))
+
+
+
+print("DK MARUF with BIG COMMUNITY LOGIC LIVE...") app.run_polling()
