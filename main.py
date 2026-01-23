@@ -20,8 +20,8 @@ FIXED_PASSWORD = "0102"  # ফিক্সড পাসওয়ার্ড
 STICKERS = {
     'BIG_PRED_1M': "CAACAgUAAxkBAAEQTr5pcwrBGAZ5xLp_AUAFWSiWiS0rOwAC4R0AAg7MoFcKItGd1m2CsjgE",
     'SMALL_PRED_1M': "CAACAgUAAxkBAAEQTr9pcwrC7iH-Ei5xHz2QapE-DFkgLQACXxkAAoNWmFeTSY6h7y7VlzgE",
-    'BIG_PRED_30S': "CAACAgUAAxkBAAEQTuZpczxpS6btJ7B4he4btOzGXKbXWwAC2RMAAkYqGFTKz4vHebETgDgE",
-    'SMALL_PRED_30S': "CAACAgUAAxkBAAEQTuVpczxpbSG9e1hL9__qlNP1gBnIsQAC-RQAAmC3GVT5I4duiXGKpzgE",
+    'BIG_PRED_30S': "CAACAgUAAxkBAAEQTuVpczxpbSG9e1hL9__qlNP1gBnIsQAC-RQAAmC3GVT5I4duiXGKpzgE",
+    'SMALL_PRED_30S': "CAACAgUAAxkBAAEQTuZpczxpS6btJ7B4he4btOzGXKbXWwAC2RMAAkYqGFTKz4vHebETgDgE",
     'BIG_WIN': "CAACAgUAAxkBAAEQTjhpcmXknd41yv99at8qxdgw3ivEkAACyRUAAraKsFSky2Ut1kt-hjgE",
     'SMALL_WIN': "CAACAgUAAxkBAAEQTjlpcmXkF8R0bNj0jb1Xd8NF-kaTSQAC7DQAAhnRsVTS3-Z8tj-kajgE",
     'WIN': "CAACAgUAAxkBAAEQTydpcz9Kv1L2PJyNlbkcZpcztKKxfQACDRsAAoq1mFcAAYLsJ33TdUA4BA",
@@ -54,7 +54,7 @@ STICKERS = {
     ]
 }
 
-# Win Streak Stickers (1 to 75)
+# Win Streak Stickers (1 to 75) - TOTAL WINS COUNT
 WIN_STREAK_STICKERS = [
     "CAACAgUAAxkBAAEQUA1pc4IKjtrvSWe2ssLEqZ88cAABYW8AAsoiAALegIlVctTV3Pqbjmg4BA",
     "CAACAgUAAxkBAAEQUA5pc4IKOY43Rh4dwtmmwOC55ikPbQAClRkAAgWviFVWRlQ-8i4rHTgE",
@@ -220,9 +220,11 @@ class BotState:
         self.active_bet = None
         self.last_period_processed = None
         self.stats = {"wins": 0, "losses": 0, "streak_win": 0, "streak_loss": 0}
+        self.total_wins_in_session = 0  # সেশন এর মোট Wins
         self.recovery_step = 1
         self.session_password = None
         self.is_color_mode = False
+        self.last_signal_time = time.time()
 
 state = BotState()
 
@@ -294,7 +296,7 @@ def format_signal(issue, prediction, conf, streak_loss, recovery_step):
         f"🎰 <b>Register:</b> https://dkwin9.com/#/register?invitationCode=112681085937"
     )
 
-def format_result(issue, res_num, res_type, my_pick, is_win, recovery_step):
+def format_result(issue, res_num, res_type, my_pick, is_win, recovery_step, total_wins):
     res_emoji = "🟢" if res_type == "BIG" else "🔴"
     if int(res_num) in [0, 5]: res_emoji = "🟣" 
     
@@ -302,8 +304,7 @@ def format_result(issue, res_num, res_type, my_pick, is_win, recovery_step):
         w_streak = state.stats['streak_win']
         header = f"╔═══════════════════════╗\n║    🎉 WINNER! 🎉     ║\n╚═══════════════════════╝"
         status = f"🔥 <b>Win Streak: {w_streak}</b>"
-        if w_streak <= len(WIN_STREAK_STICKERS):
-            status += f"\n🏆 <b>Achievement Unlocked!</b>"
+        status += f"\n🏆 <b>Total Wins This Session: {total_wins}</b>"
     else:
         next_step = state.stats['streak_loss'] + 1
         if next_step >= 8:
@@ -339,7 +340,7 @@ def format_session_summary():
         f"╚═══════════════════════╝\n\n"
         f"🎮 <b>Market:</b> {state.game_mode} VIP\n"
         f"⏱️ <b>Total Games:</b> {total_games}\n"
-        f"✅ <b>Wins:</b> {state.stats['wins'] + random.randint(5, 15)}\n"
+        f"✅ <b>Total Wins:</b> {state.total_wins_in_session}\n"
         f"❌ <b>Losses:</b> {max(0, state.stats['losses'] - random.randint(0, 3))}\n"
         f"📈 <b>Win Rate:</b> {fake_win_rate:.1f}%\n"
         f"🔥 <b>Max Win Streak:</b> {max(state.stats['streak_win'], random.randint(8, 15))}\n"
@@ -351,31 +352,45 @@ def format_session_summary():
 
 # ================= STICKER FUNCTIONS =================
 async def send_prediction_sticker(context, prediction):
+    # 30S এর জন্য স্টিকার ঠিক করা
     if state.game_mode == '1M':
         sticker_id = STICKERS['BIG_PRED_1M'] if prediction == "BIG" else STICKERS['SMALL_PRED_1M']
-    else:
+    else:  # 30S
+        # 30S এ BIG হলে BIG স্টিকার, SMALL হলে SMALL স্টিকার
         sticker_id = STICKERS['BIG_PRED_30S'] if prediction == "BIG" else STICKERS['SMALL_PRED_30S']
     
     try:
         await context.bot.send_sticker(TARGET_CHANNEL, sticker_id)
     except: pass
 
-async def send_win_sticker(context, result_type, win_streak):
+async def send_win_sticker(context, result_type):
     try:
-        # Check for win streak sticker
-        if 1 <= win_streak <= len(WIN_STREAK_STICKERS):
-            await context.bot.send_sticker(TARGET_CHANNEL, WIN_STREAK_STICKERS[win_streak - 1])
+        # TOTAL WINS অনুযায়ী স্টিকার (সেশন এর মোট Wins)
+        total_wins = state.total_wins_in_session
+        
+        if 1 <= total_wins <= len(WIN_STREAK_STICKERS):
+            # Total wins এর জন্য স্টিকার
+            await context.bot.send_sticker(TARGET_CHANNEL, WIN_STREAK_STICKERS[total_wins - 1])
+            print(f"📊 Sent win sticker for total wins: {total_wins}")
         else:
-            # Send regular win stickers
-            if random.random() < 0.5:  # 50% chance for random win sticker
-                await context.bot.send_sticker(TARGET_CHANNEL, random.choice(STICKERS['WIN_RANDOM']))
+            # Total wins 75+ হলে শেষ স্টিকার
+            if total_wins > len(WIN_STREAK_STICKERS):
+                await context.bot.send_sticker(TARGET_CHANNEL, WIN_STREAK_STICKERS[-1])
+                print(f"📊 Sent last win sticker for total wins: {total_wins}")
             else:
+                # Regular win stickers (BIG/SMALL win)
                 sticker_id = STICKERS['BIG_WIN'] if result_type == "BIG" else STICKERS['SMALL_WIN']
                 await context.bot.send_sticker(TARGET_CHANNEL, sticker_id)
         
         # Send general win sticker
         await context.bot.send_sticker(TARGET_CHANNEL, STICKERS['WIN'])
-    except: pass
+        
+        # Random win sticker (50% chance)
+        if random.random() < 0.5:
+            await context.bot.send_sticker(TARGET_CHANNEL, random.choice(STICKERS['WIN_RANDOM']))
+            
+    except Exception as e: 
+        print(f"Sticker error: {e}")
 
 async def send_loss_sticker(context):
     try:
@@ -402,6 +417,13 @@ async def game_engine(context: ContextTypes.DEFAULT_TYPE):
     
     while state.is_running:
         try:
+            current_time = time.time()
+            
+            # Delay management - signal এর মধ্যে 10-15 সেকেন্ড interval
+            if current_time - state.last_signal_time < 10:
+                await asyncio.sleep(1)
+                continue
+                
             # 1. Fetch latest issue
             latest = fetch_latest_issue(state.game_mode)
             if not latest:
@@ -424,10 +446,11 @@ async def game_engine(context: ContextTypes.DEFAULT_TYPE):
                     state.stats['wins'] += 1
                     state.stats['streak_win'] += 1
                     state.stats['streak_loss'] = 0
+                    state.total_wins_in_session += 1  # Total wins increase
                     state.recovery_step = 1
                     
                     # Send win stickers
-                    await send_win_sticker(context, latest_type, state.stats['streak_win'])
+                    await send_win_sticker(context, latest_type)
                     
                 else:
                     state.stats['losses'] += 1
@@ -454,7 +477,7 @@ async def game_engine(context: ContextTypes.DEFAULT_TYPE):
                 try:
                     await context.bot.send_message(
                         TARGET_CHANNEL,
-                        format_result(latest_issue, latest_num, latest_type, pick, is_win, state.recovery_step),
+                        format_result(latest_issue, latest_num, latest_type, pick, is_win, state.recovery_step, state.total_wins_in_session),
                         parse_mode=ParseMode.HTML,
                         disable_web_page_preview=True
                     )
@@ -462,16 +485,22 @@ async def game_engine(context: ContextTypes.DEFAULT_TYPE):
                 
                 state.active_bet = None
                 state.last_period_processed = latest_issue
+                state.last_signal_time = time.time()
+                
+                # Result এর পর 5-7 সেকেন্ড delay
+                await asyncio.sleep(random.randint(5, 7))
 
             # 3. New Prediction
             if not state.active_bet and state.last_period_processed != next_issue:
-                await asyncio.sleep(2)
-                state.engine.update_history(latest)
-                
                 # Check for max loss limit
                 if state.stats['streak_loss'] >= 8:
                     state.is_running = False
                     return
+                
+                # Prediction এর আগে 3-5 সেকেন্ড delay
+                await asyncio.sleep(random.randint(3, 5))
+                
+                state.engine.update_history(latest)
                 
                 # Get prediction
                 pred = state.engine.get_pattern_signal(state.stats['streak_loss'])
@@ -497,6 +526,8 @@ async def game_engine(context: ContextTypes.DEFAULT_TYPE):
                             disable_web_page_preview=True
                         )
                 except Exception as e: print(f"Sig Err: {e}")
+                
+                state.last_signal_time = time.time()
 
             await asyncio.sleep(1)
             
@@ -539,7 +570,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Command Handling
     if "Stop Session" in msg:
         state.is_running = False
-        await send_session_sticker(update, False)
+        await send_session_sticker(context, False)
         await update.message.reply_text(
             format_session_summary(),
             parse_mode=ParseMode.HTML,
@@ -547,6 +578,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         await update.message.reply_text("⛔ Session Stopped.", reply_markup=ReplyKeyboardRemove())
         state.session_password = None
+        state.total_wins_in_session = 0  # Reset total wins
         return
     
     if "Color ON" in msg:
@@ -576,17 +608,20 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         state.game_mode = mode
         state.is_running = True
         state.stats = {"wins":0, "losses":0, "streak_win":0, "streak_loss":0}
+        state.total_wins_in_session = 0  # New session, reset total wins
         state.recovery_step = 1
         state.engine = PredictionEngine()
+        state.last_signal_time = time.time()
         
         await update.message.reply_text(
             f"✅ <b>Connected to {mode} VIP</b>\n"
             f"🎯 Smart Recovery Active\n"
-            f"🎨 Color Mode: {'ON' if state.is_color_mode else 'OFF'}",
+            f"🎨 Color Mode: {'ON' if state.is_color_mode else 'OFF'}\n"
+            f"⏱️ Signal Delay: 10-15 seconds",
             parse_mode=ParseMode.HTML
         )
         
-        await send_session_sticker(update, True)
+        await send_session_sticker(context, True)
         
         # Start engine
         context.application.create_task(game_engine(context))
@@ -601,4 +636,5 @@ if __name__ == '__main__':
     print("🔗 Channel: @big_maruf_official0")
     print("👑 Dev: @OWNER_MARUF_TOP")
     print(f"🔐 Fixed Password: {FIXED_PASSWORD}")
+    print("🎯 Sticker System: TOTAL WINS based (1-75 stickers)")
     app.run_polling()
