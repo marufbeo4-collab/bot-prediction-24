@@ -11,10 +11,10 @@ from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandl
 from flask import Flask
 
 # ================= CONFIGURATION =================
-BOT_TOKEN = "8595453345:AAExpD-Txn7e-nysGZyrigy9hh7m3UjMraM"  # <--- আপনার টোকেন
+BOT_TOKEN = "8595453345:AAFUIOwzQN-1eWAeLprnM6zu4JtwGASp9mI"  # <--- আপনার টোকেন বসান
 TARGET_CHANNEL = -1003293007059     # <--- আপনার চ্যানেল আইডি
 
-# ================= STICKER DATABASE =================
+# ================= STICKER DATABASE (CORRECTED) =================
 STICKERS = {
     # সিগন্যাল স্টিকার
     'BIG_PRED': "CAACAgUAAxkBAAEQThJpcmSl40i0bvVSOxcDpVmqqeuqWQACySIAAlAYqVXUubH8axJhFzgE",
@@ -54,7 +54,7 @@ app = Flask('')
 
 @app.route('/')
 def home():
-    return "DK MARUF GX LOGIC RUNNING..."
+    return "DK MARUF VIP SYSTEM FIXED..."
 
 def run_http():
     app.run(host='0.0.0.0', port=8080)
@@ -63,7 +63,7 @@ def keep_alive():
     t = Thread(target=run_http)
     t.start()
 
-# ================= GX BIG COMMUNITY PREDICTION LOGIC =================
+# ================= PREDICTION LOGIC =================
 class PredictionEngine:
     def __init__(self):
         self.history = [] 
@@ -80,29 +80,32 @@ class PredictionEngine:
             self.raw_history = self.raw_history[:50]
 
     def get_pattern_signal(self):
-        # === GX BIG COMMUNITY LOGIC ===
-        # Fast & Aggressive Prediction
-        
-        if len(self.history) < 4:
+        # প্যাটার্ন এনালাইসিস লজিক
+        if len(self.history) < 6:
             return random.choice(["BIG", "SMALL"])
         
-        last_5 = self.history[:5]
+        last_6 = self.history[:6]
         
-        # 1. Dragon Pattern (GX Style: 3 same is enough)
-        if len(last_5) >= 3 and last_5[0] == last_5[1] == last_5[2]:
-            return last_5[0] 
+        # 1. Dragon Pattern (টানা এক কালার)
+        if last_6[0] == last_6[1] == last_6[2] == last_6[3]:
+            return last_6[0] 
             
-        # 2. ZigZag Pattern (GX Style: Instant flip)
-        # যদি লাস্ট রেজাল্ট তার আগেরটার উল্টো হয়
-        if len(last_5) >= 2 and last_5[0] != last_5[1]:
-            return "SMALL" if last_5[0] == "BIG" else "BIG"
+        # 2. ZigZag (Big-Small-Big-Small)
+        if last_6[0] != last_6[1] and last_6[1] != last_6[2]:
+            return "SMALL" if last_6[0] == "BIG" else "BIG"
 
-        # 3. Default Trend Follow
-        return last_5[0]
+        # 3. AABB Pattern (Big-Big-Small-Small)
+        if last_6[0] == last_6[1] and last_6[2] == last_6[3]:
+            return "SMALL" if last_6[0] == "BIG" else "BIG"
+            
+        # Default Trend
+        return last_6[0]
 
     def calculate_confidence(self):
-        # GX Style: Always High Confidence to boost morale
-        return random.randint(85, 99)
+        if len(self.history) < 5: return 60
+        if self.history[0] == self.history[1] == self.history[2]: return 95 
+        if self.history[0] != self.history[1]: return 80
+        return 70
 
 # ================= BOT STATE =================
 class BotState:
@@ -116,7 +119,7 @@ class BotState:
 
 state = BotState()
 
-# ================= API FETCH (ROBUST 5-LAYER) =================
+# ================= API FETCH (ROBUST) =================
 def fetch_latest_issue(mode):
     base_url = API_1M if mode == '1M' else API_30S
     
@@ -224,14 +227,14 @@ async def game_engine(context: ContextTypes.DEFAULT_TYPE):
                     state.stats['streak_win'] += 1
                     state.stats['streak_loss'] = 0
                     
-                    # === STICKER LOGIC ===
+                    # === STICKER FIX LOGIC ===
                     streak = state.stats['streak_win']
                     
-                    # যদি স্ট্রিক ২ বা তার বেশি হয়
+                    # যদি স্ট্রিক ২ বা তার বেশি হয়, তাহলে স্ট্রিক স্টিকার দিন
                     if streak in STICKERS['STREAK_WINS']:
                         sticker_id = STICKERS['STREAK_WINS'][streak]
                     else:
-                        # যদি ১ম উইন হয়
+                        # যদি ১ম উইন হয়, তাহলে রেজাল্ট অনুযায়ী সঠিক স্টিকার দিন
                         if latest_type == "BIG":
                             sticker_id = STICKERS['WIN_BIG']
                         else:
@@ -265,7 +268,6 @@ async def game_engine(context: ContextTypes.DEFAULT_TYPE):
                 await asyncio.sleep(2)
                 state.engine.update_history(latest)
                 
-                # Using GX Logic Here
                 pred = state.engine.get_pattern_signal()
                 conf = state.engine.calculate_confidence()
                 
@@ -330,5 +332,5 @@ if __name__ == '__main__':
     app.add_handler(CommandHandler("start", start))
     app.add_handler(MessageHandler(filters.TEXT, handle_message))
     
-    print("DK MARUF GX LOGIC LIVE...")
+    print("DK MARUF FINAL FIXED LIVE...")
     app.run_polling()
