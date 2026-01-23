@@ -1,4 +1,4 @@
-import asyncio
+              import asyncio
 import logging
 import random
 import requests
@@ -11,7 +11,7 @@ from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandl
 from flask import Flask
 
 # ================= CONFIGURATION =================
-BOT_TOKEN = "8595453345:AAFUIOwzQN-1eWAeLprnM6zu4JtwGASp9mI"  # <--- আপনার টোকেন বসান
+BOT_TOKEN = "8595453345:AAExpD-Txn7e-nysGZyrigy9hh7m3UjMraM"  # <--- আপনার টোকেন বসান
 TARGET_CHANNEL = -1003293007059     # <--- আপনার চ্যানেল আইডি
 
 # ================= STICKER DATABASE (CORRECTED) =================
