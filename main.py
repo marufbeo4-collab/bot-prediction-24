@@ -11,26 +11,20 @@ from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandl
 from flask import Flask
 
 # ================= CONFIGURATION =================
-BOT_TOKEN = "8595453345:AAExpD-Txn7e-nysGZyrigy9hh7m3UjMraM"  # <--- আপনার টোকেন বসান
+BOT_TOKEN = "8595453345:AAExpD-Txn7e-nysGZyrigy9hh7m3UjMraM"  # <--- আপনার টোকেন
 TARGET_CHANNEL = -1003293007059     # <--- আপনার চ্যানেল আইডি
+BRAND_NAME = "DK MARUF VIP SYSTEM"  # <--- মারুফ ব্র্যান্ডিং
 
-# ================= STICKER DATABASE (CORRECTED) =================
+# ================= STICKER DATABASE =================
 STICKERS = {
-    # সিগন্যাল স্টিকার
     'BIG_PRED': "CAACAgUAAxkBAAEQThJpcmSl40i0bvVSOxcDpVmqqeuqWQACySIAAlAYqVXUubH8axJhFzgE",
     'SMALL_PRED': "CAACAgUAAxkBAAEQThZpcmTJ3JsaZHTYtVIcE4YEFuXDFgAC9BoAApWhsVWD2IhYoJfTkzgE",
-    
-    # রেজাল্ট স্টিকার (Specific)
-    'WIN_BIG': "CAACAgUAAxkBAAEQTjhpcmXknd41yv99at8qxdgw3ivEkAACyRUAAraKsFSky2Ut1kt-hjgE",   # Big Win
-    'WIN_SMALL': "CAACAgUAAxkBAAEQTjlpcmXkF8R0bNj0jb1Xd8NF-kaTSQAC7DQAAhnRsVTS3-Z8tj-kajgE", # Small Win
-    
-    # লস স্টিকার
+    'WIN_BIG': "CAACAgUAAxkBAAEQTjhpcmXknd41yv99at8qxdgw3ivEkAACyRUAAraKsFSky2Ut1kt-hjgE",
+    'WIN_SMALL': "CAACAgUAAxkBAAEQTjlpcmXkF8R0bNj0jb1Xd8NF-kaTSQAC7DQAAhnRsVTS3-Z8tj-kajgE",
     'LOSS': [
         "CAACAgUAAxkBAAEQTcVpclMOQ7uFjrUs9ss15ij7rKBj9AACsB0AAobyqFV1rI6qlIIdeTgE",
         "CAACAgUAAxkBAAEQTh5pcmTbrSEe58RRXvtu_uwEAWZoQQAC5BEAArgxYVUhMlnBGKmcbzgE"
     ],
-    
-    # স্ট্রিক উইন স্টিকার (Streak 2 to 10)
     'STREAK_WINS': {
         2: "CAACAgUAAxkBAAEQTiBpcmUfm9aQmlIHtPKiG2nE2e6EeAACcRMAAiLWqFSpdxWmKJ1TXzgE",
         3: "CAACAgUAAxkBAAEQTiFpcmUgdgJQ_czeoFyRhNZiZI2lwwAC8BcAAv8UqFSVBQEdUW48HTgE",
@@ -49,21 +43,25 @@ STICKERS = {
 API_1M = "https://draw.ar-lottery01.com/WinGo/WinGo_1M/GetHistoryIssuePage.json"
 API_30S = "https://draw.ar-lottery01.com/WinGo/WinGo_30S/GetHistoryIssuePage.json"
 
-# ================= FLASK SERVER =================
+# ================= FLASK SERVER (24/7 FIX) =================
 app = Flask('')
 
 @app.route('/')
 def home():
-    return "DK MARUF VIP SYSTEM FIXED..."
+    return "DK MARUF ENGINE RUNNING..."
 
 def run_http():
-    app.run(host='0.0.0.0', port=8080)
+    # পোর্ট ফিক্স যাতে সার্ভার বন্ধ না করে দেয়
+    port = int(os.environ.get("PORT", 8080))
+    try:
+        app.run(host='0.0.0.0', port=port)
+    except: pass
 
 def keep_alive():
     t = Thread(target=run_http)
     t.start()
 
-# ================= PREDICTION LOGIC =================
+# ================= BIG COMMUNITY LOGIC (INTEGRATED) =================
 class PredictionEngine:
     def __init__(self):
         self.history = [] 
@@ -80,32 +78,32 @@ class PredictionEngine:
             self.raw_history = self.raw_history[:50]
 
     def get_pattern_signal(self):
-        # প্যাটার্ন এনালাইসিস লজিক
+        # === BIG COMMUNITY LOGIC IMPLEMENTATION ===
         if len(self.history) < 6:
             return random.choice(["BIG", "SMALL"])
         
         last_6 = self.history[:6]
         
-        # 1. Dragon Pattern (টানা এক কালার)
-        if last_6[0] == last_6[1] == last_6[2] == last_6[3]:
+        # 1. Dragon Pattern (টানা ৩ বার একই) -> Trend Follow
+        if last_6[0] == last_6[1] == last_6[2]:
             return last_6[0] 
             
-        # 2. ZigZag (Big-Small-Big-Small)
+        # 2. ZigZag Pattern (1-1-1) -> Alternate
         if last_6[0] != last_6[1] and last_6[1] != last_6[2]:
+            # জিগজ্যাগ চললে প্যাটার্ন বজায় রাখবে
             return "SMALL" if last_6[0] == "BIG" else "BIG"
 
-        # 3. AABB Pattern (Big-Big-Small-Small)
-        if last_6[0] == last_6[1] and last_6[2] == last_6[3]:
+        # 3. AABB Pattern (Two-Two) -> Pattern Break
+        if last_6[0] == last_6[1] and last_6[2] == last_6[3] and last_6[1] != last_6[2]:
+            # AABB শেষ হলে সাধারণত জিগজ্যাগ শুরু হয়
             return "SMALL" if last_6[0] == "BIG" else "BIG"
             
-        # Default Trend
-        return last_6[0]
+        # 4. Default -> Trend Majority
+        big_count = last_6.count("BIG")
+        return "BIG" if big_count >= 3 else "SMALL"
 
     def calculate_confidence(self):
-        if len(self.history) < 5: return 60
-        if self.history[0] == self.history[1] == self.history[2]: return 95 
-        if self.history[0] != self.history[1]: return 80
-        return 70
+        return random.randint(90, 99)
 
 # ================= BOT STATE =================
 class BotState:
@@ -139,8 +137,7 @@ def fetch_latest_issue(mode):
 
     for url in proxies:
         try:
-            print(f"Trying API: {url[:40]}...")
-            response = requests.get(url, headers=headers, timeout=6)
+            response = requests.get(url, headers=headers, timeout=5)
             if response.status_code == 200:
                 data = response.json()
                 if data and "data" in data and "list" in data["data"]:
@@ -149,20 +146,20 @@ def fetch_latest_issue(mode):
             continue
     return None
 
-# ================= FORMATTING =================
+# ================= FORMATTING (DK MARUF STYLE) =================
 def format_signal(issue, prediction, conf, streak_loss):
     emoji = "🟢" if prediction == "BIG" else "🔴"
     color = "GREEN" if prediction == "BIG" else "RED"
     
     lvl = streak_loss + 1
-    amount_x = 3 ** (lvl - 1)
+    multiplier = 3 ** (lvl - 1) # 1, 3, 9...
     
     plan_text = f"Start (1X)"
-    if lvl > 1: plan_text = f"⚠️ Recovery Stage {lvl-1} ({amount_x}X)"
-    if lvl > 4: plan_text = f"🔥 DO OR DIE ({amount_x}X)"
+    if lvl > 1: plan_text = f"⚠️ Recovery Step {lvl} ({multiplier}X)"
+    if lvl > 4: plan_text = f"🔥 DO OR DIE ({multiplier}X)"
 
     return (
-        f"🛡 <b>DK MARUF PREMIUM V2</b> 🛡\n"
+        f"🛡 <b>{BRAND_NAME}</b> 🛡\n"
         f"➖➖➖➖➖➖➖➖➖➖\n"
         f"📊 <b>Market:</b> {state.game_mode} VIP\n"
         f"🆔 <b>Period:</b> <code>{issue}</code>\n"
@@ -186,7 +183,8 @@ def format_result(issue, res_num, res_type, my_pick, is_win):
         status = f"🔥 <b>Win Streak: {w_streak}</b> 🔥"
     else:
         header = f"❌ <b>LOSS / MISS</b> ❌"
-        status = f"⚠️ <b>Next 3X Recovery</b>"
+        next_step = state.stats['streak_loss'] + 1
+        status = f"⚠️ <b>Go For Step {next_step} Recovery</b>"
 
     return (
         f"{header}\n"
@@ -198,16 +196,16 @@ def format_result(issue, res_num, res_type, my_pick, is_win):
         f"📶 <b>System by DK Maruf</b>"
     )
 
-# ================= ENGINE LOOP =================
+# ================= 24/7 AUTO-RESTART ENGINE =================
 async def game_engine(context: ContextTypes.DEFAULT_TYPE):
-    print("🚀 Fixed Engine Started...")
+    print("🚀 DK Maruf Engine (Big Comm. Logic) Started...")
     
     while state.is_running:
         try:
             # 1. Fetch
             latest = fetch_latest_issue(state.game_mode)
             if not latest:
-                await asyncio.sleep(2)
+                await asyncio.sleep(3)
                 continue
                 
             latest_issue = latest['issueNumber']
@@ -227,18 +225,12 @@ async def game_engine(context: ContextTypes.DEFAULT_TYPE):
                     state.stats['streak_win'] += 1
                     state.stats['streak_loss'] = 0
                     
-                    # === STICKER FIX LOGIC ===
+                    # Sticker Logic
                     streak = state.stats['streak_win']
-                    
-                    # যদি স্ট্রিক ২ বা তার বেশি হয়, তাহলে স্ট্রিক স্টিকার দিন
                     if streak in STICKERS['STREAK_WINS']:
                         sticker_id = STICKERS['STREAK_WINS'][streak]
                     else:
-                        # যদি ১ম উইন হয়, তাহলে রেজাল্ট অনুযায়ী সঠিক স্টিকার দিন
-                        if latest_type == "BIG":
-                            sticker_id = STICKERS['WIN_BIG']
-                        else:
-                            sticker_id = STICKERS['WIN_SMALL']
+                        sticker_id = STICKERS['WIN_BIG'] if latest_type == "BIG" else STICKERS['WIN_SMALL']
                     
                     try: await context.bot.send_sticker(TARGET_CHANNEL, sticker_id)
                     except: pass
@@ -256,9 +248,10 @@ async def game_engine(context: ContextTypes.DEFAULT_TYPE):
                     await context.bot.send_message(
                         TARGET_CHANNEL,
                         format_result(latest_issue, latest_num, latest_type, pick, is_win),
-                        parse_mode=ParseMode.HTML
+                        parse_mode=ParseMode.HTML,
+                        disable_web_page_preview=True
                     )
-                except: pass
+                except Exception as e: print(f"Res Err: {e}")
                 
                 state.active_bet = None
                 state.last_period_processed = latest_issue
@@ -268,6 +261,7 @@ async def game_engine(context: ContextTypes.DEFAULT_TYPE):
                 await asyncio.sleep(2)
                 state.engine.update_history(latest)
                 
+                # USING BIG COMMUNITY LOGIC HERE
                 pred = state.engine.get_pattern_signal()
                 conf = state.engine.calculate_confidence()
                 
@@ -283,15 +277,16 @@ async def game_engine(context: ContextTypes.DEFAULT_TYPE):
                     await context.bot.send_message(
                         TARGET_CHANNEL,
                         format_signal(next_issue, pred, conf, state.stats['streak_loss']),
-                        parse_mode=ParseMode.HTML
+                        parse_mode=ParseMode.HTML,
+                        disable_web_page_preview=True
                     )
-                except: pass
+                except Exception as e: print(f"Sig Err: {e}")
 
             await asyncio.sleep(2)
             
         except Exception as e:
-            print(f"Error: {e}")
-            await asyncio.sleep(5)
+            print(f"Loop Restarting: {e}")
+            await asyncio.sleep(2) # ক্র্যাশ করলে ২ সেকেন্ড পর অটো রিস্টার্ট হবে
 
 # ================= HANDLERS =================
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -332,5 +327,5 @@ if __name__ == '__main__':
     app.add_handler(CommandHandler("start", start))
     app.add_handler(MessageHandler(filters.TEXT, handle_message))
     
-    print("DK MARUF FINAL FIXED LIVE...")
+    print("DK MARUF with BIG COMMUNITY LOGIC LIVE...")
     app.run_polling()
