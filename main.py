@@ -13,21 +13,15 @@ from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandl
 from flask import Flask
 
 # ================= CONFIGURATION =================
-BOT_TOKEN = "8595453345:AAGndyFZES2qZL37LRc3CeqGxKyWq7HeTxk"  # আপনার টোকেন
-TARGET_CHANNEL = -1003293007059     # আপনার চ্যানেল আইডি
-
-# LINKS & BRANDING
+BOT_TOKEN = "8595453345:AAGndyFZES2qZL37LRc3CeqGxKyWq7HeTxk"
+TARGET_CHANNEL = -1003293007059
 BRAND_NAME = "👑 𝐃𝐊 𝐌𝐀𝐑𝐔𝐅 𝐕𝐈𝐏 𝐒𝐘𝐒𝐓𝐄𝐌 👑"
-OWNER_LINK = "@OWNER_MARUF_TOP"
-CHANNEL_LINK = "https://t.me/big_maruf_official0"
-REG_LINK = "https://dkwin9.com/#/register?invitationCode=112681085937"
 
-# GOOGLE SHEET CONFIG (PASSWORD)
-# শীটটি অবশ্যই "Anyone with the link" -> "Viewer" মোডে থাকতে হবে
+# GOOGLE SHEET PASSWORD SETUP
 SHEET_ID = "1foCsja-2HRi8HHjnMP8CyheaLOwk-ZiJ7a5uqs9khvo"
 SHEET_URL = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/export?format=csv"
 
-# ================= STICKER DATABASE (HUGE COLLECTION) =================
+# ================= STICKER DATABASE (FULL) =================
 STICKERS = {
     'START': [
         "CAACAgUAAxkBAAEQTjJpcmWOexDHyK90IXQU5Qzo18uBKAACwxMAAlD6QFRRMClp8Q4JAAE4BA",
@@ -47,6 +41,7 @@ STICKERS = {
     
     'WIN_BIG': ["CAACAgUAAxkBAAEQTjhpcmXknd41yv99at8qxdgw3ivEkAACyRUAAraKsFSky2Ut1kt-hjgE"],
     'WIN_SMALL': ["CAACAgUAAxkBAAEQTjlpcmXkF8R0bNj0jb1Xd8NF-kaTSQAC7DQAAhnRsVTS3-Z8tj-kajgE"],
+    
     'WIN_GENERAL': [
         "CAACAgUAAxkBAAEQTydpcz9Kv1L2PJyNlbkcZpcztKKxfQACDRsAAoq1mFcAAYLsJ33TdUA4BA",
         "CAACAgUAAxkBAAEQTzNpcz9ns8rx_5xmxk4HHQOJY2uUQQAC3RoAAuCpcFbMKj0VkxPOdTgE",
@@ -67,7 +62,7 @@ STICKERS = {
     'COLOR_RED': ["CAACAgUAAxkBAAEQUClpc4JDd9n_ZQ45hPk-a3tEjFXnugACbhgAAqItoVd2zRs4VkXOHDgE"],
     'COLOR_GREEN': ["CAACAgUAAxkBAAEQUCppc4JDHWjTzBCFIOx2Hcjtz9UnnAACzRwAAnR3oVejA9DVGekyYTgE"],
     
-    # Random Win Stickers (Huge List)
+    # Random Win Stickers
     'WIN_STREAK': [
         "CAACAgUAAxkBAAEQUA1pc4IKjtrvSWe2ssLEqZ88cAABYW8AAsoiAALegIlVctTV3Pqbjmg4BA",
         "CAACAgUAAxkBAAEQUA5pc4IKOY43Rh4dwtmmwOC55ikPbQAClRkAAgWviFVWRlQ-8i4rHTgE",
@@ -152,7 +147,7 @@ STICKERS = {
 API_1M = "https://draw.ar-lottery01.com/WinGo/WinGo_1M/GetHistoryIssuePage.json"
 API_30S = "https://draw.ar-lottery01.com/WinGo/WinGo_30S/GetHistoryIssuePage.json"
 
-# ================= FLASK SERVER (24/7 FIX) =================
+# ================= FLASK SERVER =================
 app = Flask('')
 
 @app.route('/')
@@ -170,25 +165,23 @@ def keep_alive():
 
 # ================= HELPER FUNCTIONS =================
 def get_sheet_password():
-    """Google Sheet এর Cell A1 থেকে পাসওয়ার্ড পড়ে"""
+    """Google Sheet থেকে পাসওয়ার্ড নিবে"""
     try:
-        response = requests.get(SHEET_URL)
+        response = requests.get(SHEET_URL, timeout=5)
         if response.status_code == 200:
             csv_data = csv.reader(io.StringIO(response.text))
             rows = list(csv_data)
             if rows and rows[0]:
-                return rows[0][0].strip() # Return A1 value
+                return rows[0][0].strip()
     except Exception as e:
         print(f"Sheet Error: {e}")
-    return "admin123" # Default fallback (যদি শীট লোড না হয়)
+    return "admin123"
 
 def get_random_sticker(category_list):
-    """লিস্ট থেকে র‍্যান্ডম স্টিকার সিলেক্ট করে"""
     if not category_list: return None
     return random.choice(category_list)
 
 def generate_fake_summary(real_wins, real_loss):
-    """সেশন শেষে ফেক উইন দেখানোর জন্য"""
     fake_wins = real_wins + random.randint(5, 12)
     fake_streak = random.randint(7, 15)
     profit = (fake_wins * 1000) - (real_loss * 1000) + random.randint(500, 5000)
@@ -214,15 +207,13 @@ class PredictionEngine:
         if len(self.history) < 6: return random.choice(["BIG", "SMALL"])
         last_6 = self.history[:6]
         
-        # Pattern Logic
-        if last_6[0] == last_6[1] == last_6[2]: prediction = last_6[0] # Dragon
-        elif last_6[0] != last_6[1] and last_6[1] != last_6[2]: prediction = "SMALL" if last_6[0] == "BIG" else "BIG" # ZigZag
+        if last_6[0] == last_6[1] == last_6[2]: prediction = last_6[0] 
+        elif last_6[0] != last_6[1] and last_6[1] != last_6[2]: prediction = "SMALL" if last_6[0] == "BIG" else "BIG"
         else:
             last_num = int(self.raw_history[0]['number'])
             period_digit = int(str(self.raw_history[0]['issueNumber'])[-1])
             prediction = "BIG" if ((last_num + period_digit) % 2) == 1 else "SMALL"
 
-        # Smart Recovery (Inverse on streak loss > 2)
         if current_streak_loss >= 2:
             return "SMALL" if prediction == "BIG" else "BIG"
         
@@ -233,7 +224,7 @@ class BotState:
     def __init__(self):
         self.is_running = False
         self.game_mode = '1M'
-        self.color_mode = False # কালার সিগন্যাল ডিফল্ট অফ
+        self.color_mode = False 
         self.password_verified = False
         self.engine = PredictionEngine()
         self.active_bet = None
@@ -242,24 +233,38 @@ class BotState:
 
 state = BotState()
 
-# ================= API FETCH =================
+# ================= ROBUST API FETCH =================
 def fetch_latest_issue(mode):
     base_url = API_1M if mode == '1M' else API_30S
-    try:
-        response = requests.get(f"{base_url}?t={int(time.time()*1000)}", timeout=5)
-        data = response.json()
-        if data and "data" in data and "list" in data["data"]:
-            return data["data"]["list"][0]
-    except: pass
+    proxies = [
+        f"{base_url}?t={int(time.time()*1000)}", 
+        f"https://corsproxy.io/?{base_url}?t={int(time.time()*1000)}", 
+        f"https://api.allorigins.win/raw?url={base_url}",
+        f"https://thingproxy.freeboard.io/fetch/{base_url}",
+        f"https://api.codetabs.com/v1/proxy?quest={base_url}"
+    ]
+    
+    headers = {
+        "User-Agent": f"Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/{random.randint(100, 120)}.0.0.0 Safari/537.36",
+        "Referer": "https://dkwin9.com/"
+    }
+
+    for url in proxies:
+        try:
+            response = requests.get(url, headers=headers, timeout=5)
+            if response.status_code == 200:
+                data = response.json()
+                if data and "data" in data and "list" in data["data"]:
+                    return data["data"]["list"][0]
+        except: continue
     return None
 
-# ================= VIP FORMATTING =================
+# ================= FORMATTING (SAFE HTML) =================
 def format_signal(issue, prediction, conf, streak_loss, show_color):
     emoji = "🟢" if prediction == "BIG" else "🔴"
     
-    # 8-Step Recovery Logic
     lvl = streak_loss + 1
-    multipliers = [1, 3, 9, 27, 81, 243, 729, 2187] # Martingale / 3x Plan
+    multipliers = [1, 3, 9, 27, 81, 243, 729, 2187] 
     amount_x = multipliers[lvl-1] if lvl <= 8 else "MAX"
     
     plan_text = f"⚡ <b>LEVEL {lvl} - BET {amount_x}X</b>"
@@ -273,16 +278,15 @@ def format_signal(issue, prediction, conf, streak_loss, show_color):
 
     return (
         f"💎 <b>{BRAND_NAME}</b> 💎\n"
-        f"〰️〰️〰️〰️〰️〰️〰️〰️〰️〰️\n"
+        f"➖➖➖➖➖➖➖➖➖➖\n"
         f"🎲 <b>PREDICTION TIME</b>\n"
         f"🆔 <b>PERIOD:</b> <code>{issue}</code>\n"
         f"📊 <b>SIGNAL:</b> ▶️ <b>{prediction}</b> ◀️\n"
         f"{color_text}"
         f"🎯 <b>CONFIDENCE:</b> {conf}%\n"
         f"💰 <b>STRATEGY:</b> {plan_text}\n"
-        f"〰️〰️〰️〰️〰️〰️〰️〰️〰️〰️\n"
-        f"🔗 <a href='{REG_LINK}'><b>REGISTER NOW</b></a> | <a href='{CHANNEL_LINK}'><b>JOIN CHANNEL</b></a>\n"
-        f"👨‍💻 <b>OWNER:</b> {OWNER_LINK}"
+        f"➖➖➖➖➖➖➖➖➖➖\n"
+        f"👑 <b>OWNER:</b> @OWNER_MARUF_TOP"
     )
 
 def format_result(issue, res_num, res_type, my_pick, is_win):
@@ -301,37 +305,27 @@ def format_result(issue, res_num, res_type, my_pick, is_win):
         f"🆔 <b>PERIOD:</b> <code>{issue}</code>\n"
         f"🔢 <b>RESULT:</b> {res_emoji} {res_num} ({res_type})\n"
         f"🙋 <b>MY PICK:</b> {my_pick}\n"
-        f"〰️〰️〰️〰️〰️〰️〰️〰️〰️〰️\n"
+        f"➖➖➖➖➖➖➖➖➖➖\n"
         f"{status}\n"
-        f"🔗 <a href='{REG_LINK}'><b>CREATE ACCOUNT</b></a>"
+        f"📶 <b>System by DK Maruf</b>"
     )
 
 # ================= ENGINE LOOP =================
 async def game_engine(context: ContextTypes.DEFAULT_TYPE):
-    # সেশন শুরুর আগে পাসওয়ার্ড রি-চেক
-    required_pass = get_sheet_password()
-    print(f"Server Pass: {required_pass}") # Debug check
-
+    print("🚀 Engine Started...")
+    
     while state.is_running:
         try:
-            # 8-Step Failure Check (Auto Stop)
+            # 8-Step Auto Stop
             if state.stats['streak_loss'] >= 8:
                 state.is_running = False
-                await context.bot.send_message(
-                    TARGET_CHANNEL,
-                    "⛔ <b>SESSION STOPPED AUTOMATICALLY</b>\n"
-                    "⚠️ <b>Market is too volatile (8 Level Hit).</b>\n"
-                    "🛡️ <b>Capital Protection Mode Activated.</b>\n"
-                    "Rest for 2 hours and come back!",
-                    parse_mode=ParseMode.HTML
-                )
-                try: await context.bot.send_sticker(TARGET_CHANNEL, get_random_sticker(STICKERS['STOP']))
-                except: pass
+                await context.bot.send_message(TARGET_CHANNEL, "⛔ <b>MAX LEVEL HIT - STOPPING</b>", parse_mode=ParseMode.HTML)
                 return
 
-            # 1. Fetch Data
+            # 1. Fetch
             latest = fetch_latest_issue(state.game_mode)
             if not latest:
+                print("⚠️ API Fetch Failed - Retrying...")
                 await asyncio.sleep(3)
                 continue
                 
@@ -344,7 +338,6 @@ async def game_engine(context: ContextTypes.DEFAULT_TYPE):
             if state.active_bet and state.active_bet['period'] == latest_issue:
                 pick = state.active_bet['pick']
                 is_win = (pick == latest_type)
-                
                 state.engine.update_history(latest)
                 
                 if is_win:
@@ -352,31 +345,27 @@ async def game_engine(context: ContextTypes.DEFAULT_TYPE):
                     state.stats['streak_win'] += 1
                     state.stats['streak_loss'] = 0
                     
-                    # Win Sticker Logic
                     if state.game_mode == '1M':
                          stk = STICKERS['WIN_BIG'] if latest_type == "BIG" else STICKERS['WIN_SMALL']
                     else:
-                         # 30S or General Win Random
                          stk = STICKERS['WIN_GENERAL'] + STICKERS['WIN_STREAK']
-                    
                     try: await context.bot.send_sticker(TARGET_CHANNEL, get_random_sticker(stk))
                     except: pass
-                    
                 else:
                     state.stats['losses'] += 1
                     state.stats['streak_win'] = 0
                     state.stats['streak_loss'] += 1
-                    
                     try: await context.bot.send_sticker(TARGET_CHANNEL, get_random_sticker(STICKERS['LOSS']))
                     except: pass
 
-                # Send Result Message
-                await context.bot.send_message(
-                    TARGET_CHANNEL,
-                    format_result(latest_issue, latest_num, latest_type, pick, is_win),
-                    parse_mode=ParseMode.HTML,
-                    disable_web_page_preview=True
-                )
+                try:
+                    await context.bot.send_message(
+                        TARGET_CHANNEL,
+                        format_result(latest_issue, latest_num, latest_type, pick, is_win),
+                        parse_mode=ParseMode.HTML,
+                        disable_web_page_preview=True
+                    )
+                except Exception as e: print(f"Res Msg Err: {e}")
                 
                 state.active_bet = None
                 state.last_period_processed = latest_issue
@@ -388,10 +377,9 @@ async def game_engine(context: ContextTypes.DEFAULT_TYPE):
                 
                 pred = state.engine.get_pattern_signal(state.stats['streak_loss'])
                 conf = random.randint(90, 99)
-                
                 state.active_bet = {"period": next_issue, "pick": pred}
                 
-                # Signal Sticker Selection
+                # Stickers
                 if state.game_mode == '1M':
                     s_stk_list = STICKERS['PRED_1M_BIG'] if pred == "BIG" else STICKERS['PRED_1M_SMALL']
                 else:
@@ -400,105 +388,78 @@ async def game_engine(context: ContextTypes.DEFAULT_TYPE):
                 try: await context.bot.send_sticker(TARGET_CHANNEL, get_random_sticker(s_stk_list))
                 except: pass
 
-                # Color Sticker (Optional)
                 if state.color_mode:
                     c_stk = STICKERS['COLOR_GREEN'] if pred == "BIG" else STICKERS['COLOR_RED']
                     try: await context.bot.send_sticker(TARGET_CHANNEL, get_random_sticker(c_stk))
                     except: pass
 
-                # Signal Message
-                await context.bot.send_message(
-                    TARGET_CHANNEL,
-                    format_signal(next_issue, pred, conf, state.stats['streak_loss'], state.color_mode),
-                    parse_mode=ParseMode.HTML,
-                    disable_web_page_preview=True
-                )
+                try:
+                    await context.bot.send_message(
+                        TARGET_CHANNEL,
+                        format_signal(next_issue, pred, conf, state.stats['streak_loss'], state.color_mode),
+                        parse_mode=ParseMode.HTML,
+                        disable_web_page_preview=True
+                    )
+                except Exception as e:
+                    print(f"Sig Msg Err: {e}")
+                    # Fallback if HTML fails
+                    await context.bot.send_message(TARGET_CHANNEL, f"⚠️ Prediction: {pred} (Check Code HTML)")
 
             await asyncio.sleep(2)
             
         except Exception as e:
-            print(f"Error: {e}")
+            print(f"Loop Err: {e}")
             await asyncio.sleep(2)
 
-# ================= COMMAND HANDLERS =================
+# ================= HANDLERS =================
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    state.password_verified = False # Reset verification
-    await update.message.reply_text(
-        "🔒 <b>SECURITY CHECK</b>\n"
-        "Please enter the access password:",
-        parse_mode=ParseMode.HTML
-    )
+    state.password_verified = False
+    await update.message.reply_text("🔒 <b>SECURITY CHECK:</b> Enter Password", parse_mode=ParseMode.HTML)
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = update.message.text
-    user_id = update.effective_user.id
     
-    # --- PASSWORD LOGIC ---
     if not state.password_verified:
-        correct_pass = get_sheet_password()
-        if msg.strip() == correct_pass:
+        if msg.strip() == get_sheet_password():
             state.password_verified = True
             await update.message.reply_text(
-                f"✅ <b>ACCESS GRANTED</b>\nWelcome Boss {update.effective_user.first_name}",
+                f"✅ <b>WELCOME BOSS</b>",
                 parse_mode=ParseMode.HTML,
-                reply_markup=ReplyKeyboardMarkup([
-                    ['⚡ 1M VIP', '⚡ 30S VIP'],
-                    ['🎨 Color: OFF', '🛑 STOP SESSION']
-                ], resize_keyboard=True)
+                reply_markup=ReplyKeyboardMarkup([['⚡ 1M VIP', '⚡ 30S VIP'], ['🎨 Color: OFF', '🛑 STOP']], resize_keyboard=True)
             )
         else:
-            await update.message.reply_text("❌ <b>WRONG PASSWORD!</b> Try again.")
+            await update.message.reply_text("❌ Wrong Password!")
         return
 
-    # --- CONTROL LOGIC ---
     if "STOP" in msg:
-        if state.is_running:
-            state.is_running = False
-            # Fake Summary Generation
-            fw, fs, fp = generate_fake_summary(state.stats['wins'], state.stats['losses'])
-            
-            summary = (
-                f"📊 <b>SESSION SUMMARY</b>\n"
-                f"➖➖➖➖➖➖➖➖➖➖\n"
-                f"✅ <b>Total Wins:</b> {fw}\n"
-                f"❌ <b>Total Loss:</b> {random.randint(0,2)}\n"
-                f"🔥 <b>Max Streak:</b> {fs}\n"
-                f"💵 <b>Est. Profit:</b> +{fp} BDT\n"
-                f"➖➖➖➖➖➖➖➖➖➖\n"
-                f"👋 <i>Session Closed. See you soon!</i>"
-            )
-            await context.bot.send_message(TARGET_CHANNEL, summary, parse_mode=ParseMode.HTML)
-            try: await context.bot.send_sticker(TARGET_CHANNEL, get_random_sticker(STICKERS['STOP']))
-            except: pass
-            
-            await update.message.reply_text("⛔ Bot Stopped & Summary Sent.", reply_markup=ReplyKeyboardRemove())
-            state.password_verified = False # Lock bot again
-        else:
-            await update.message.reply_text("⚠️ Bot is not running.")
+        state.is_running = False
+        fw, fs, fp = generate_fake_summary(state.stats['wins'], state.stats['losses'])
+        summary = f"📊 <b>SUMMARY</b>\n✅ Wins: {fw}\n🔥 Streak: {fs}\n💵 Profit: +{fp} BDT"
+        await context.bot.send_message(TARGET_CHANNEL, summary, parse_mode=ParseMode.HTML)
+        try: await context.bot.send_sticker(TARGET_CHANNEL, get_random_sticker(STICKERS['STOP']))
+        except: pass
+        await update.message.reply_text("⛔ Stopped.", reply_markup=ReplyKeyboardRemove())
+        state.password_verified = False
 
     elif "Color" in msg:
         state.color_mode = not state.color_mode
         status = "ON" if state.color_mode else "OFF"
-        # Update button text
-        new_keyboard = [['⚡ 1M VIP', '⚡ 30S VIP'], [f'🎨 Color: {status}', '🛑 STOP SESSION']]
-        await update.message.reply_text(f"🎨 Color Signals: <b>{status}</b>", reply_markup=ReplyKeyboardMarkup(new_keyboard, resize_keyboard=True), parse_mode=ParseMode.HTML)
+        kb = [['⚡ 1M VIP', '⚡ 30S VIP'], [f'🎨 Color: {status}', '🛑 STOP']]
+        await update.message.reply_text(f"🎨 Color: {status}", reply_markup=ReplyKeyboardMarkup(kb, resize_keyboard=True))
 
     elif "VIP" in msg:
         if state.is_running:
-            await update.message.reply_text("⚠️ Bot already running! Stop first.")
+            await update.message.reply_text("⚠️ Already Running!")
             return
-            
-        mode = '1M' if '1M' in msg else '30S'
-        state.game_mode = mode
+        state.game_mode = '1M' if '1M' in msg else '30S'
         state.is_running = True
         state.stats = {"wins":0, "losses":0, "streak_win":0, "streak_loss":0}
         state.engine = PredictionEngine()
         
-        # Start Sticker
         try: await context.bot.send_sticker(TARGET_CHANNEL, get_random_sticker(STICKERS['START']))
         except: pass
         
-        await update.message.reply_text(f"🚀 <b>{mode} VIP ENGINE STARTED</b>", parse_mode=ParseMode.HTML)
+        await update.message.reply_text(f"🚀 {state.game_mode} Started!", parse_mode=ParseMode.HTML)
         context.application.create_task(game_engine(context))
 
 if __name__ == '__main__':
@@ -507,5 +468,5 @@ if __name__ == '__main__':
     app.add_handler(CommandHandler("start", start))
     app.add_handler(MessageHandler(filters.TEXT, handle_message))
     
-    print("👑 DK MARUF VIP SYSTEM LIVE...")
-    app.run_polling()
+    print("👑 DK MARUF SYSTEM LIVE...")
+    app.run_polling(allowed_updates=Update.ALL_TYPES, drop_pending_updates=True)
