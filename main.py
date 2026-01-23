@@ -13,7 +13,7 @@ from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandl
 from flask import Flask
 
 # ================= CONFIGURATION =================
-BOT_TOKEN = "8595453345:AAExpD-Txn7e-nysGZyrigy9hh7m3UjMraM"  # আপনার টোকেন
+BOT_TOKEN = "8595453345:AAGndyFZES2qZL37LRc3CeqGxKyWq7HeTxk"  # আপনার টোকেন
 TARGET_CHANNEL = -1003293007059     # আপনার চ্যানেল আইডি
 
 # LINKS & BRANDING
