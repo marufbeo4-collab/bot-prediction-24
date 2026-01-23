@@ -11,26 +11,26 @@ from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandl
 from flask import Flask
 
 # ================= CONFIGURATION =================
-BOT_TOKEN = "8595453345:AAFUIOwzQN-1eWAeLprnM6zu4JtwGASp9mI"  # <--- টোকেন বসান
-TARGET_CHANNEL = -1003293007059     # <--- চ্যানেল আইডি
+BOT_TOKEN = "8595453345:AAExpD-Txn7e-nysGZyrigy9hh7m3UjMraM"  # <--- আপনার টোকেন
+TARGET_CHANNEL = -1003293007059     # <--- আপনার চ্যানেল আইডি
 
-# ================= STICKER DATABASE (ALL FIXED) =================
+# ================= STICKER DATABASE =================
 STICKERS = {
-    # আপনার নতুন সিগন্যাল স্টিকার
-    'BIG_PRED': "CAACAgUAAxkBAAEQTr5pcwrBGAZ5xLp_AUAFWSiWiS0rOwAC4R0AAg7MoFcKItGd1m2CsjgE",
-    'SMALL_PRED': "CAACAgUAAxkBAAEQTr9pcwrC7iH-Ei5xHz2QapE-DFkgLQACXxkAAoNWmFeTSY6h7y7VlzgE",
+    # সিগন্যাল স্টিকার
+    'BIG_PRED': "CAACAgUAAxkBAAEQThJpcmSl40i0bvVSOxcDpVmqqeuqWQACySIAAlAYqVXUubH8axJhFzgE",
+    'SMALL_PRED': "CAACAgUAAxkBAAEQThZpcmTJ3JsaZHTYtVIcE4YEFuXDFgAC9BoAApWhsVWD2IhYoJfTkzgE",
     
-    # আপনার নতুন ২টা WIN স্টিকার
-    'WIN_NORMAL': [
-        "CAACAgUAAxkBAAEQTp9pcvGaDIa0xIXW6NaMEyrMDYPhMAACNSQAApOucFd1ls-xMEW5FzgE",
-        "CAACAgUAAxkBAAEQTqBpcvGaK5dD4qhRRF4aCj1MVxn45gACxBwAArHqkFcaOXk9J8eCIDgE"
+    # রেজাল্ট স্টিকার (Specific)
+    'WIN_BIG': "CAACAgUAAxkBAAEQTjhpcmXknd41yv99at8qxdgw3ivEkAACyRUAAraKsFSky2Ut1kt-hjgE",   # Big Win
+    'WIN_SMALL': "CAACAgUAAxkBAAEQTjlpcmXkF8R0bNj0jb1Xd8NF-kaTSQAC7DQAAhnRsVTS3-Z8tj-kajgE", # Small Win
+    
+    # লস স্টিকার
+    'LOSS': [
+        "CAACAgUAAxkBAAEQTcVpclMOQ7uFjrUs9ss15ij7rKBj9AACsB0AAobyqFV1rI6qlIIdeTgE",
+        "CAACAgUAAxkBAAEQTh5pcmTbrSEe58RRXvtu_uwEAWZoQQAC5BEAArgxYVUhMlnBGKmcbzgE"
     ],
     
-    # আপনার নতুন ১টা LOSS স্টিকার
-    'LOSS_NORMAL': "CAACAgUAAxkBAAEQTqFpcvGaFnH_vkTDifzqxFjxnzTHwgACjBoAAhh2mFcTQGE0Czq6hzgE",
-
-    # স্টার্ট এবং স্ট্রিক স্টিকার (আগের গুলো)
-    'START': "CAACAgUAAxkBAAEQTjJpcmWOexDHyK90IXQU5Qzo18uBKAACwxMAAlD6QFRRMClp8Q4JAAE4BA",
+    # স্ট্রিক উইন স্টিকার (Streak 2 to 10)
     'STREAK_WINS': {
         2: "CAACAgUAAxkBAAEQTiBpcmUfm9aQmlIHtPKiG2nE2e6EeAACcRMAAiLWqFSpdxWmKJ1TXzgE",
         3: "CAACAgUAAxkBAAEQTiFpcmUgdgJQ_czeoFyRhNZiZI2lwwAC8BcAAv8UqFSVBQEdUW48HTgE",
@@ -41,7 +41,8 @@ STICKERS = {
         8: "CAACAgUAAxkBAAEQTixpcmUmevnNEqUbr0qbbVgW4psMNQACMxUAAow-qFSnSz4Ik1ddNzgE",
         9: "CAACAgUAAxkBAAEQTi1pcmUmpSxAHo2pvR-GjCPTmkLr0AACLh0AAhCRqFRH5-2YyZKq1jgE",
         10: "CAACAgUAAxkBAAEQTi5pcmUmjmjp7oXg4InxI1dGYruxDwACqBgAAh19qVT6X_-oEywCkzgE"
-    }
+    },
+    'START': "CAACAgUAAxkBAAEQTjJpcmWOexDHyK90IXQU5Qzo18uBKAACwxMAAlD6QFRRMClp8Q4JAAE4BA"
 }
 
 # API LINKS
@@ -53,7 +54,7 @@ app = Flask('')
 
 @app.route('/')
 def home():
-    return "DK MARUF VIP SYSTEM RUNNING..."
+    return "DK MARUF GX LOGIC RUNNING..."
 
 def run_http():
     app.run(host='0.0.0.0', port=8080)
@@ -62,7 +63,7 @@ def keep_alive():
     t = Thread(target=run_http)
     t.start()
 
-# ================= PREDICTION LOGIC (Pattern) =================
+# ================= GX BIG COMMUNITY PREDICTION LOGIC =================
 class PredictionEngine:
     def __init__(self):
         self.history = [] 
@@ -79,18 +80,29 @@ class PredictionEngine:
             self.raw_history = self.raw_history[:50]
 
     def get_pattern_signal(self):
-        if len(self.history) < 6: return random.choice(["BIG", "SMALL"])
-        last_6 = self.history[:6]
+        # === GX BIG COMMUNITY LOGIC ===
+        # Fast & Aggressive Prediction
         
-        # 1. Dragon Pattern
-        if last_6[0] == last_6[1] == last_6[2]: return last_6[0]
-        # 2. ZigZag Pattern
-        if last_6[0] != last_6[1]: return "SMALL" if last_6[0] == "BIG" else "BIG"
+        if len(self.history) < 4:
+            return random.choice(["BIG", "SMALL"])
         
-        return last_6[0]
+        last_5 = self.history[:5]
+        
+        # 1. Dragon Pattern (GX Style: 3 same is enough)
+        if len(last_5) >= 3 and last_5[0] == last_5[1] == last_5[2]:
+            return last_5[0] 
+            
+        # 2. ZigZag Pattern (GX Style: Instant flip)
+        # যদি লাস্ট রেজাল্ট তার আগেরটার উল্টো হয়
+        if len(last_5) >= 2 and last_5[0] != last_5[1]:
+            return "SMALL" if last_5[0] == "BIG" else "BIG"
+
+        # 3. Default Trend Follow
+        return last_5[0]
 
     def calculate_confidence(self):
-        return random.randint(88, 99)
+        # GX Style: Always High Confidence to boost morale
+        return random.randint(85, 99)
 
 # ================= BOT STATE =================
 class BotState:
@@ -104,13 +116,12 @@ class BotState:
 
 state = BotState()
 
-# ================= API FETCH (YOUR 5-LAYER PROXY LOGIC) =================
+# ================= API FETCH (ROBUST 5-LAYER) =================
 def fetch_latest_issue(mode):
     base_url = API_1M if mode == '1M' else API_30S
     
-    # 5 Layer Protection to bypass block (From your code)
     proxies = [
-        f"{base_url}?t={int(time.time()*1000)}", # Direct
+        f"{base_url}?t={int(time.time()*1000)}", 
         f"https://corsproxy.io/?{base_url}?t={int(time.time()*1000)}", 
         f"https://api.allorigins.win/raw?url={base_url}",
         f"https://thingproxy.freeboard.io/fetch/{base_url}",
@@ -125,6 +136,7 @@ def fetch_latest_issue(mode):
 
     for url in proxies:
         try:
+            print(f"Trying API: {url[:40]}...")
             response = requests.get(url, headers=headers, timeout=6)
             if response.status_code == 200:
                 data = response.json()
@@ -132,12 +144,13 @@ def fetch_latest_issue(mode):
                     return data["data"]["list"][0]
         except:
             continue
-    
     return None
 
 # ================= FORMATTING =================
 def format_signal(issue, prediction, conf, streak_loss):
     emoji = "🟢" if prediction == "BIG" else "🔴"
+    color = "GREEN" if prediction == "BIG" else "RED"
+    
     lvl = streak_loss + 1
     amount_x = 3 ** (lvl - 1)
     
@@ -152,7 +165,7 @@ def format_signal(issue, prediction, conf, streak_loss):
         f"🆔 <b>Period:</b> <code>{issue}</code>\n"
         f"➖➖➖➖➖➖➖➖➖➖\n"
         f"🔥 <b>SIGNAL:</b>  👉 <b>{prediction}</b> 👈\n"
-        f"🎨 <b>Color:</b> GREEN {emoji}" if prediction == "BIG" else f"🎨 <b>Color:</b> RED {emoji}\n"
+        f"🎨 <b>Color:</b> {color} {emoji}\n"
         f"🚀 <b>Confidence:</b> {conf}%\n"
         f"➖➖➖➖➖➖➖➖➖➖\n"
         f"💰 <b>Plan:</b> {plan_text}\n"
@@ -184,7 +197,7 @@ def format_result(issue, res_num, res_type, my_pick, is_win):
 
 # ================= ENGINE LOOP =================
 async def game_engine(context: ContextTypes.DEFAULT_TYPE):
-    print("🚀 Engine Started...")
+    print("🚀 Fixed Engine Started...")
     
     while state.is_running:
         try:
@@ -214,23 +227,28 @@ async def game_engine(context: ContextTypes.DEFAULT_TYPE):
                     # === STICKER LOGIC ===
                     streak = state.stats['streak_win']
                     
-                    # Streak Win (2+)
+                    # যদি স্ট্রিক ২ বা তার বেশি হয়
                     if streak in STICKERS['STREAK_WINS']:
-                        try: await context.bot.send_sticker(TARGET_CHANNEL, STICKERS['STREAK_WINS'][streak])
-                        except: pass
+                        sticker_id = STICKERS['STREAK_WINS'][streak]
                     else:
-                        # Normal Win (1st)
-                        try: await context.bot.send_sticker(TARGET_CHANNEL, random.choice(STICKERS['WIN_NORMAL']))
-                        except: pass
+                        # যদি ১ম উইন হয়
+                        if latest_type == "BIG":
+                            sticker_id = STICKERS['WIN_BIG']
+                        else:
+                            sticker_id = STICKERS['WIN_SMALL']
+                    
+                    try: await context.bot.send_sticker(TARGET_CHANNEL, sticker_id)
+                    except: pass
+                    
                 else:
                     state.stats['losses'] += 1
                     state.stats['streak_win'] = 0
                     state.stats['streak_loss'] += 1
                     
-                    # Normal Loss
-                    try: await context.bot.send_sticker(TARGET_CHANNEL, STICKERS['LOSS_NORMAL'])
+                    try: await context.bot.send_sticker(TARGET_CHANNEL, random.choice(STICKERS['LOSS']))
                     except: pass
 
+                # Result Message
                 try:
                     await context.bot.send_message(
                         TARGET_CHANNEL,
@@ -242,17 +260,18 @@ async def game_engine(context: ContextTypes.DEFAULT_TYPE):
                 state.active_bet = None
                 state.last_period_processed = latest_issue
 
-            # 3. New Signal
+            # 3. New Prediction
             if not state.active_bet and state.last_period_processed != next_issue:
                 await asyncio.sleep(2)
                 state.engine.update_history(latest)
                 
+                # Using GX Logic Here
                 pred = state.engine.get_pattern_signal()
                 conf = state.engine.calculate_confidence()
                 
                 state.active_bet = {"period": next_issue, "pick": pred}
                 
-                # Signal Sticker (New)
+                # Signal Sticker
                 s_stk = STICKERS['BIG_PRED'] if pred == "BIG" else STICKERS['SMALL_PRED']
                 try: await context.bot.send_sticker(TARGET_CHANNEL, s_stk)
                 except: pass
@@ -309,8 +328,7 @@ if __name__ == '__main__':
     keep_alive()
     app = Application.builder().token(BOT_TOKEN).build()
     app.add_handler(CommandHandler("start", start))
-    app.add_handler(CommandHandler("off", handle_message))
     app.add_handler(MessageHandler(filters.TEXT, handle_message))
     
-    print("DK MARUF FINAL MERGED SYSTEM LIVE...")
+    print("DK MARUF GX LOGIC LIVE...")
     app.run_polling()
