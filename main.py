@@ -225,6 +225,7 @@ class BotState:
         self.session_password = None
         self.is_color_mode = False
         self.last_signal_time = time.time()
+        self.session_start_time = None
 
 state = BotState()
 
@@ -324,12 +325,22 @@ def format_result(issue, res_num, res_type, my_pick, is_win, recovery_step, tota
         f"📶 <b>System by DK Maruf VIP</b>"
     )
 
-def format_session_summary():
+def format_session_summary_for_channel():
     total_games = state.stats['wins'] + state.stats['losses']
     if total_games == 0:
         win_rate = 0
     else:
         win_rate = (state.stats['wins'] / total_games) * 100
+    
+    # Calculate session duration
+    if state.session_start_time:
+        duration_seconds = int(time.time() - state.session_start_time)
+        hours = duration_seconds // 3600
+        minutes = (duration_seconds % 3600) // 60
+        seconds = duration_seconds % 60
+        duration_str = f"{hours}h {minutes}m {seconds}s"
+    else:
+        duration_str = "N/A"
     
     # Fake statistics to make it look more impressive
     fake_win_rate = min(95, win_rate + random.randint(10, 30))
@@ -339,15 +350,17 @@ def format_session_summary():
         f"║   📊 SESSION SUMMARY  ║\n"
         f"╚═══════════════════════╝\n\n"
         f"🎮 <b>Market:</b> {state.game_mode} VIP\n"
-        f"⏱️ <b>Total Games:</b> {total_games}\n"
+        f"⏱️ <b>Session Duration:</b> {duration_str}\n"
+        f"🎯 <b>Total Games:</b> {total_games}\n"
         f"✅ <b>Total Wins:</b> {state.total_wins_in_session}\n"
-        f"❌ <b>Losses:</b> {max(0, state.stats['losses'] - random.randint(0, 3))}\n"
+        f"❌ <b>Losses:</b> {max(1, state.stats['losses'])}\n"
         f"📈 <b>Win Rate:</b> {fake_win_rate:.1f}%\n"
         f"🔥 <b>Max Win Streak:</b> {max(state.stats['streak_win'], random.randint(8, 15))}\n"
         f"━━━━━━━━━━━━━━━━━━━━━━━\n"
         f"🎯 <b>System Accuracy: EXCELLENT</b>\n\n"
         f"🔗 <b>Join:</b> @big_maruf_official0\n"
-        f"👑 <b>Dev:</b> @OWNER_MARUF_TOP"
+        f"👑 <b>Dev:</b> @OWNER_MARUF_TOP\n"
+        f"🎰 <b>Register:</b> https://dkwin9.com/#/register?invitationCode=112681085937"
     )
 
 # ================= STICKER FUNCTIONS =================
@@ -361,55 +374,63 @@ async def send_prediction_sticker(context, prediction):
     
     try:
         await context.bot.send_sticker(TARGET_CHANNEL, sticker_id)
-    except: pass
+    except Exception as e: 
+        print(f"Prediction sticker error: {e}")
 
 async def send_win_sticker(context, result_type):
     try:
         # TOTAL WINS অনুযায়ী স্টিকার (সেশন এর মোট Wins)
         total_wins = state.total_wins_in_session
         
+        # Always send WIN sticker first
+        await context.bot.send_sticker(TARGET_CHANNEL, STICKERS['WIN'])
+        
+        # Send win sticker based on result type
+        sticker_id = STICKERS['BIG_WIN'] if result_type == "BIG" else STICKERS['SMALL_WIN']
+        await context.bot.send_sticker(TARGET_CHANNEL, sticker_id)
+        
+        # Send TOTAL WINS sticker
         if 1 <= total_wins <= len(WIN_STREAK_STICKERS):
             # Total wins এর জন্য স্টিকার
             await context.bot.send_sticker(TARGET_CHANNEL, WIN_STREAK_STICKERS[total_wins - 1])
             print(f"📊 Sent win sticker for total wins: {total_wins}")
-        else:
+        elif total_wins > len(WIN_STREAK_STICKERS):
             # Total wins 75+ হলে শেষ স্টিকার
-            if total_wins > len(WIN_STREAK_STICKERS):
-                await context.bot.send_sticker(TARGET_CHANNEL, WIN_STREAK_STICKERS[-1])
-                print(f"📊 Sent last win sticker for total wins: {total_wins}")
-            else:
-                # Regular win stickers (BIG/SMALL win)
-                sticker_id = STICKERS['BIG_WIN'] if result_type == "BIG" else STICKERS['SMALL_WIN']
-                await context.bot.send_sticker(TARGET_CHANNEL, sticker_id)
+            await context.bot.send_sticker(TARGET_CHANNEL, WIN_STREAK_STICKERS[-1])
+            print(f"📊 Sent last win sticker for total wins: {total_wins}")
         
-        # Send general win sticker
-        await context.bot.send_sticker(TARGET_CHANNEL, STICKERS['WIN'])
-        
-        # Random win sticker (50% chance)
-        if random.random() < 0.5:
+        # Random win sticker (30% chance)
+        if random.random() < 0.3:
             await context.bot.send_sticker(TARGET_CHANNEL, random.choice(STICKERS['WIN_RANDOM']))
             
     except Exception as e: 
-        print(f"Sticker error: {e}")
+        print(f"Win sticker error: {e}")
 
 async def send_loss_sticker(context):
     try:
         await context.bot.send_sticker(TARGET_CHANNEL, STICKERS['LOSS'])
-    except: pass
+    except Exception as e: 
+        print(f"Loss sticker error: {e}")
 
 async def send_color_sticker(context, color):
     try:
         sticker_id = STICKERS['GREEN_SIGNAL'] if color == "GREEN" else STICKERS['RED_SIGNAL']
         await context.bot.send_sticker(TARGET_CHANNEL, sticker_id)
-    except: pass
+    except Exception as e: 
+        print(f"Color sticker error: {e}")
 
-async def send_session_sticker(context, is_start=True):
+async def send_session_sticker_to_channel(context, is_start=True):
     try:
         if is_start:
-            await context.bot.send_sticker(TARGET_CHANNEL, random.choice(STICKERS['SESSION_START']))
+            sticker = random.choice(STICKERS['SESSION_START'])
+            print(f"📤 Sending START sticker to channel: {sticker[:20]}...")
         else:
-            await context.bot.send_sticker(TARGET_CHANNEL, random.choice(STICKERS['SESSION_RANDOM']))
-    except: pass
+            sticker = random.choice(STICKERS['SESSION_RANDOM'])
+            print(f"📤 Sending END sticker to channel: {sticker[:20]}...")
+        
+        await context.bot.send_sticker(TARGET_CHANNEL, sticker)
+    except Exception as e: 
+        print(f"Session sticker error: {e}")
 
 # ================= 24/7 AUTO-RESTART ENGINE =================
 async def game_engine(context: ContextTypes.DEFAULT_TYPE):
@@ -449,7 +470,7 @@ async def game_engine(context: ContextTypes.DEFAULT_TYPE):
                     state.total_wins_in_session += 1  # Total wins increase
                     state.recovery_step = 1
                     
-                    # Send win stickers
+                    # Send win stickers to CHANNEL
                     await send_win_sticker(context, latest_type)
                     
                 else:
@@ -470,10 +491,10 @@ async def game_engine(context: ContextTypes.DEFAULT_TYPE):
                         state.is_running = False
                         return
                     
-                    # Send loss sticker
+                    # Send loss sticker to CHANNEL
                     await send_loss_sticker(context)
 
-                # Result Message
+                # Result Message to CHANNEL
                 try:
                     await context.bot.send_message(
                         TARGET_CHANNEL,
@@ -508,14 +529,14 @@ async def game_engine(context: ContextTypes.DEFAULT_TYPE):
                 
                 state.active_bet = {"period": next_issue, "pick": pred}
                 
-                # Send stickers
+                # Send stickers to CHANNEL
                 await send_prediction_sticker(context, pred)
                 
                 # Send color sticker if color mode is on
                 if state.is_color_mode:
                     await send_color_sticker(context, "GREEN" if pred == "BIG" else "RED")
                 
-                # Send signal message
+                # Send signal message to CHANNEL
                 try:
                     signal_msg = format_signal(next_issue, pred, conf, state.stats['streak_loss'], state.recovery_step)
                     if signal_msg:  # Check if signal is not None (for 8 step loss case)
@@ -570,15 +591,30 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Command Handling
     if "Stop Session" in msg:
         state.is_running = False
-        await send_session_sticker(context, False)
-        await update.message.reply_text(
-            format_session_summary(),
-            parse_mode=ParseMode.HTML,
-            disable_web_page_preview=True
-        )
+        
+        # Send END sticker to CHANNEL
+        await send_session_sticker_to_channel(context, False)
+        
+        # Send SUMMARY to CHANNEL
+        try:
+            summary_msg = format_session_summary_for_channel()
+            await context.bot.send_message(
+                TARGET_CHANNEL,
+                summary_msg,
+                parse_mode=ParseMode.HTML,
+                disable_web_page_preview=True
+            )
+            print("📤 Summary sent to channel successfully!")
+        except Exception as e:
+            print(f"Channel summary error: {e}")
+        
+        # Send confirmation to user
         await update.message.reply_text("⛔ Session Stopped.", reply_markup=ReplyKeyboardRemove())
+        
+        # Reset session
         state.session_password = None
         state.total_wins_in_session = 0  # Reset total wins
+        state.session_start_time = None
         return
     
     if "Color ON" in msg:
@@ -592,10 +628,17 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     
     if "Summary" in msg:
+        # শুধু ইউজারকে দেখাবে, চ্যানেলে নয়
         await update.message.reply_text(
-            format_session_summary(),
-            parse_mode=ParseMode.HTML,
-            disable_web_page_preview=True
+            "📊 <b>Current Session Stats:</b>\n"
+            f"🎮 Market: {state.game_mode}\n"
+            f"✅ Wins: {state.stats['wins']}\n"
+            f"❌ Losses: {state.stats['losses']}\n"
+            f"🏆 Total Wins: {state.total_wins_in_session}\n"
+            f"🔥 Win Streak: {state.stats['streak_win']}\n"
+            f"⚠️ Loss Streak: {state.stats['streak_loss']}\n"
+            f"📈 Recovery Step: {state.recovery_step}",
+            parse_mode=ParseMode.HTML
         )
         return
     
@@ -612,7 +655,9 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         state.recovery_step = 1
         state.engine = PredictionEngine()
         state.last_signal_time = time.time()
+        state.session_start_time = time.time()  # Session start time
         
+        # Send confirmation to user
         await update.message.reply_text(
             f"✅ <b>Connected to {mode} VIP</b>\n"
             f"🎯 Smart Recovery Active\n"
@@ -621,7 +666,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             parse_mode=ParseMode.HTML
         )
         
-        await send_session_sticker(context, True)
+        # Send START sticker to CHANNEL
+        await send_session_sticker_to_channel(context, True)
         
         # Start engine
         context.application.create_task(game_engine(context))
@@ -633,8 +679,10 @@ if __name__ == '__main__':
     app.add_handler(MessageHandler(filters.TEXT, handle_message))
     
     print("🚀 DK MARUF VIP with SMART RECOVERY LOGIC LIVE...")
+    print(f"📢 Target Channel: {TARGET_CHANNEL}")
     print("🔗 Channel: @big_maruf_official0")
     print("👑 Dev: @OWNER_MARUF_TOP")
     print(f"🔐 Fixed Password: {FIXED_PASSWORD}")
     print("🎯 Sticker System: TOTAL WINS based (1-75 stickers)")
+    print("📤 All stickers/signals/summary will be sent to CHANNEL automatically!")
     app.run_polling()
