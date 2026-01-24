@@ -185,7 +185,7 @@ def format_signal(issue, prediction, conf, streak_loss):
         join_line = f"\n🔗 <a href='{CHANNEL_LINK}'><b>JOIN VIP CHANNEL</b></a>"
 
     return (
-        f"🛡 <b>{BRAND_NAME}</b> 🛡\n"
+        f" <b>{BRAND_NAME}</b> \n"
         f"━━━━━━━━━━━━━━━━━━━━\n"
         f"📊 <b>Server:</b> {state.game_mode} VIP\n"
         f"🎲 <b>Period:</b> <code>{issue}</code>\n"
