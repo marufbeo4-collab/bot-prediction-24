@@ -11,28 +11,46 @@ from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandl
 from flask import Flask
 
 # ================= CONFIGURATION =================
-BOT_TOKEN = "8595453345:AAGndyFZES2qZL37LRc3CeqGxKyWq7HeTxk"  # <--- আপনার টোকেন
-TARGET_CHANNEL = -1003293007059     # <--- আপনার চ্যানেল আইডি
-BRAND_NAME = "DK MARUF VIP SYSTEM"
+
+BOT_TOKEN = "8595453345:AAGndyFZES2qZL37LRc3CeqGxKyWq7HeTxk"  # <-- আপনার টোকেন দিন
+TARGET_CHANNEL = -1003293007059            # <-- আপনার চ্যানেল আইডি
+BRAND_NAME = "DK MARUF VIP SYSTEM"         # <-- মারুফ ব্র্যান্ডিং
+
+# (Optional) যদি তুমি ফরম্যাটে লিংক দিতে চাও
+CHANNEL_LINK = "https://t.me/dk_mentor_maruf_official"
 
 # ================= STICKER DATABASE =================
+
 STICKERS = {
-    'BIG_PRED': "CAACAgUAAxkBAAEQThJpcmSl40i0bvVSOxcDpVmqqeuqWQACySIAAlAYqVXUubH8axJhFzgE",
-    'SMALL_PRED': "CAACAgUAAxkBAAEQThZpcmTJ3JsaZHTYtVIcE4YEFuXDFgAC9BoAApWhsVWD2IhYoJfTkzgE",
+    'BIG_PRED': "CAACAgUAAxkBAAEQTr5pcwrBGAZ5xLp_AUAFWSiWiS0rOwAC4R0AAg7MoFcKItGd1m2CsjgE",
+    'SMALL_PRED': "CAACAgUAAxkBAAEQTr9pcwrC7iH-Ei5xHz2QapE-DFkgLQACXxkAAoNWmFeTSY6h7y7VlzgE",
     'WIN_BIG': "CAACAgUAAxkBAAEQTjhpcmXknd41yv99at8qxdgw3ivEkAACyRUAAraKsFSky2Ut1kt-hjgE",
     'WIN_SMALL': "CAACAgUAAxkBAAEQTjlpcmXkF8R0bNj0jb1Xd8NF-kaTSQAC7DQAAhnRsVTS3-Z8tj-kajgE",
     'LOSS': [
-        "CAACAgUAAxkBAAEQTcVpclMOQ7uFjrUs9ss15ij7rKBj9AACsB0AAobyqFV1rI6qlIIdeTgE"
+        "CAACAgUAAxkBAAEQUThpdFDWMkZlP8PkRjl82QRGStGpFQACohQAAn_dMVcPP5YV0-TlBTgE",
+        "CAACAgUAAxkBAAEQTh5pcmTbrSEe58RRXvtu_uwEAWZoQQAC5BEAArgxYVUhMlnBGKmcbzgE"
     ],
-    'START': "CAACAgUAAxkBAAEQTjJpcmWOexDHyK90IXQU5Qzo18uBKAACwxMAAlD6QFRRMClp8Q4JAAE4BA",
-    'STOP': "CAACAgUAAxkBAAEQTjZpcmWif_jWz8x5r7q8_y4j8y4j8AACxhMAAlD6QFRRMClp8Q4JAAE4BA" # (Optional: Stop sticker if you have one)
+    'STREAK_WINS': {
+        2: "CAACAgUAAxkBAAEQTiBpcmUfm9aQmlIHtPKiG2nE2e6EeAACcRMAAiLWqFSpdxWmKJ1TXzgE",
+        3: "CAACAgUAAxkBAAEQTiFpcmUgdgJQ_czeoFyRhNZiZI2lwwAC8BcAAv8UqFSVBQEdUW48HTgE",
+        4: "CAACAgUAAxkBAAEQTiJpcmUgSydN-tKxoSVdFuAvCcJ3fQACvSEAApMRqFQoUYBnH5Pc7TgE",
+        5: "CAACAgUAAxkBAAEQTiNpcmUgu_dP3wKT2k94EJCiw3u52QACihoAArkfqFSlrldtXbLGGDgE",
+        6: "CAACAgUAAxkBAAEQTiRpcmUhQJUjd2ukdtfEtBjwtMH4MAACWRgAAsTFqVTato0SmSN-6jgE",
+        7: "CAACAgUAAxkBAAEQTiVpcmUhha9HAAF19fboYayfUrm3tdYAAioXAAIHgKhUD0QmGyF5Aug4BA",
+        8: "CAACAgUAAxkBAAEQTixpcmUmevnNEqUbr0qbbVgW4psMNQACMxUAAow-qFSnSz4Ik1ddNzgE",
+        9: "CAACAgUAAxkBAAEQTi1pcmUmpSxAHo2pvR-GjCPTmkLr0AACLh0AAhCRqFRH5-2YyZKq1jgE",
+        10: "CAACAgUAAxkBAAEQTi5pcmUmjmjp7oXg4InxI1dGYruxDwACqBgAAh19qVT6X_-oEywCkzgE"
+    },
+    'START': "CAACAgUAAxkBAAEQTjJpcmWOexDHyK90IXQU5Qzo18uBKAACwxMAAlD6QFRRMClp8Q4JAAE4BA"
 }
 
-# API LINKS
+# ================= API LINKS =================
+
 API_1M = "https://draw.ar-lottery01.com/WinGo/WinGo_1M/GetHistoryIssuePage.json"
 API_30S = "https://draw.ar-lottery01.com/WinGo/WinGo_30S/GetHistoryIssuePage.json"
 
-# ================= FLASK SERVER =================
+# ================= FLASK SERVER (24/7 FIX) =================
+
 app = Flask('')
 
 @app.route('/')
@@ -40,44 +58,63 @@ def home():
     return "DK MARUF ENGINE RUNNING..."
 
 def run_http():
+    # পোর্ট ফিক্স যাতে সার্ভার বন্ধ না করে দেয়
     port = int(os.environ.get("PORT", 8080))
-    try: app.run(host='0.0.0.0', port=port)
-    except: pass
+    try:
+        app.run(host='0.0.0.0', port=port)
+    except Exception:
+        pass
 
 def keep_alive():
     t = Thread(target=run_http)
+    t.daemon = True
     t.start()
 
-# ================= PREDICTION ENGINE =================
+# ================= LOGIC =================
+
 class PredictionEngine:
     def __init__(self):
-        self.history = [] 
-        
-    def update_history(self, result_type):
-        self.history.insert(0, result_type)
-        self.history = self.history[:20]
+        self.history = []
+        self.raw_history = []
 
-    def get_signal(self, streak_loss):
-        # অটো ইনভার্স লজিক (২ বার লস হলে উল্টো সিগন্যাল দিবে)
-        prediction = random.choice(["BIG", "SMALL"])
-        
-        # যদি ডাটা থাকে, একটু স্মার্ট লজিক
-        if len(self.history) >= 3:
-            if self.history[0] == self.history[1] == self.history[2]:
-                prediction = self.history[0] # Dragon
-            else:
-                prediction = "SMALL" if self.history[0] == "BIG" else "BIG" # ZigZag
+    def update_history(self, issue_data):
+        number = int(issue_data['number'])
+        result_type = "BIG" if number >= 5 else "SMALL"
 
-        # Recovery Logic
-        if streak_loss >= 2:
-            return "SMALL" if prediction == "BIG" else "BIG"
-        
-        return prediction
+        if (not self.raw_history) or (self.raw_history[0]['issueNumber'] != issue_data['issueNumber']):
+            self.history.insert(0, result_type)
+            self.raw_history.insert(0, issue_data)
+            self.history = self.history[:50]
+            self.raw_history = self.raw_history[:50]
 
-    def get_confidence(self):
-        return random.randint(93, 99)
+    def get_pattern_signal(self):
+        # === BIG COMMUNITY LOGIC IMPLEMENTATION (Maruf variant) ===
+        if len(self.history) < 6:
+            return random.choice(["BIG", "SMALL"])
+
+        last_6 = self.history[:6]
+
+        # 1) Dragon Pattern (3 same) -> Trend Follow
+        if last_6[0] == last_6[1] == last_6[2]:
+            return last_6[0]
+
+        # 2) ZigZag Pattern -> Alternate
+        if last_6[0] != last_6[1] and last_6[1] != last_6[2]:
+            return "SMALL" if last_6[0] == "BIG" else "BIG"
+
+        # 3) AABB Pattern -> Pattern Break
+        if last_6[0] == last_6[1] and last_6[2] == last_6[3] and last_6[1] != last_6[2]:
+            return "SMALL" if last_6[0] == "BIG" else "BIG"
+
+        # 4) Default -> Majority
+        big_count = last_6.count("BIG")
+        return "BIG" if big_count >= 3 else "SMALL"
+
+    def calculate_confidence(self):
+        return random.randint(90, 99)
 
 # ================= BOT STATE =================
+
 class BotState:
     def __init__(self):
         self.is_running = False
@@ -85,270 +122,308 @@ class BotState:
         self.engine = PredictionEngine()
         self.active_bet = None
         self.last_period_processed = None
-        # Stats track
-        self.total_signals = 0
-        self.real_wins = 0
-        self.real_losses = 0
-        self.streak_loss = 0
-        self.streak_win = 0
+        self.stats = {"wins": 0, "losses": 0, "streak_win": 0, "streak_loss": 0}
 
 state = BotState()
 
-# ================= API FETCH =================
+# ================= API FETCH (ROBUST) =================
+
 def fetch_latest_issue(mode):
-    # মোড অনুযায়ী লিংক সেট
-    url = API_1M if mode == '1M' else API_30S
-    
-    # Cache ফাঁকি দেওয়ার জন্য টাইমস্ট্যাম্প
-    full_url = f"{url}?t={int(time.time()*1000)}"
-    
+    base_url = API_1M if mode == '1M' else API_30S
+
+    proxies = [
+        f"{base_url}?t={int(time.time()*1000)}",
+        f"https://corsproxy.io/?{base_url}?t={int(time.time()*1000)}",
+        f"https://api.allorigins.win/raw?url={base_url}",
+        f"https://thingproxy.freeboard.io/fetch/{base_url}",
+        f"https://api.codetabs.com/v1/proxy?quest={base_url}"
+    ]
+
     headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
-        "Referer": "https://dkwin9.com/"
+        "User-Agent": f"Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/{random.randint(100, 120)}.0.0.0 Safari/537.36",
+        "Referer": "https://dkwin9.com/",
+        "Origin": "https://dkwin9.com"
     }
 
-    try:
-        response = requests.get(full_url, headers=headers, timeout=4)
-        if response.status_code == 200:
-            data = response.json()
-            if data and "data" in data and "list" in data["data"]:
-                return data["data"]["list"][0]
-    except:
-        pass
+    for url in proxies:
+        try:
+            response = requests.get(url, headers=headers, timeout=5)
+            if response.status_code == 200:
+                data = response.json()
+                if data and "data" in data and "list" in data["data"]:
+                    return data["data"]["list"][0]
+        except Exception:
+            continue
+
     return None
 
-# ================= FORMATTING =================
+# ================= FORMATTING (DK MARUF STYLE) =================
+
 def format_signal(issue, prediction, conf, streak_loss):
     emoji = "🟢" if prediction == "BIG" else "🔴"
-    color = "GREEN" if prediction == "BIG" else "RED"
-    
+
     lvl = streak_loss + 1
-    multiplier = 3 ** (lvl - 1)
-    
-    plan_text = f"Start (1X)"
-    if lvl > 1: plan_text = f"⚠️ Recovery Step {lvl} ({multiplier}X)"
+    multiplier = 3 ** (lvl - 1)  # 1, 3, 9...
+
+    plan_text = "Start (1X)"
+    if lvl > 1:
+        plan_text = f"⚠️ Recovery Step {lvl} ({multiplier}X)"
+    if lvl > 4:
+        plan_text = f"🔥 DO OR DIE ({multiplier}X)"
+
+    join_line = ""
+    if CHANNEL_LINK:
+        join_line = f"\n🔗 <a href='{CHANNEL_LINK}'><b>JOIN VIP CHANNEL</b></a>"
 
     return (
         f"🛡 <b>{BRAND_NAME}</b> 🛡\n"
-        f"➖➖➖➖➖➖➖➖➖➖\n"
-        f"📊 <b>Market:</b> {state.game_mode} VIP\n"
-        f"🆔 <b>Period:</b> <code>{issue}</code>\n"
-        f"➖➖➖➖➖➖➖➖➖➖\n"
-        f"🔥 <b>SIGNAL:</b>  👉 <b>{prediction}</b> 👈\n"
-        f"🎨 <b>Color:</b> {color} {emoji}\n"
-        f"🚀 <b>Confidence:</b> {conf}%\n"
-        f"➖➖➖➖➖➖➖➖➖➖\n"
-        f"💰 <b>Plan:</b> {plan_text}\n"
-        f"👑 <b>Dev:</b> @dk_mentor_maruf_official"
+        f"━━━━━━━━━━━━━━━━━━━━\n"
+        f"📊 <b>Server:</b> {state.game_mode} VIP\n"
+        f"🎲 <b>Period:</b> <code>{issue}</code>\n"
+        f"━━━━━━━━━━━━━━━━━━━━\n"
+        f"🔮 <b>PREDICTION:</b> {emoji} <b>{prediction}</b> {emoji}\n"
+        f"💣 <b>Confidence:</b> {conf}%\n"
+        f"💰 <b>Bet:</b> {plan_text}\n"
+        f"━━━━━━━━━━━━━━━━━━━━"
+        f"{join_line}"
     )
 
 def format_result(issue, res_num, res_type, my_pick, is_win):
     res_emoji = "🟢" if res_type == "BIG" else "🔴"
-    if int(res_num) in [0, 5]: res_emoji = "🟣"
-    
+    if int(res_num) in [0, 5]:
+        res_emoji = "🟣"
+
     if is_win:
-        header = "🎉 <b>BOOM! WINNER!</b> 🎉"
-        status = f"🔥 <b>Win Streak: {state.streak_win}</b>"
+        header = "✅ <b>ＷＩＮ ＷＩＮ ＷＩＮ</b> ✅"
+        status = "🔥 <b>PREDICTION PASSED</b>"
     else:
         header = "❌ <b>LOSS / MISS</b> ❌"
-        status = "⚠️ <b>Go For Recovery</b>"
+        next_step = state.stats['streak_loss'] + 1
+        status = f"⚠️ <b>Go For Step {next_step} Recovery</b>"
 
     return (
         f"{header}\n"
-        f"🆔 <b>Period:</b> <code>{issue}</code>\n"
-        f"🎲 <b>Result:</b> {res_emoji} {res_num} ({res_type})\n"
+        f"━━━━━━━━━━━━━━━━━━━━\n"
+        f"🎲 <b>Period:</b> <code>{issue}</code>\n"
+        f"🎰 <b>Result:</b> {res_emoji} <b>{res_num} ({res_type})</b>\n"
         f"🎯 <b>My Pick:</b> {my_pick}\n"
+        f"━━━━━━━━━━━━━━━━━━━━\n"
         f"{status}\n"
-        f"📶 <b>System by DK Maruf</b>"
+        f"👑 <b>{BRAND_NAME}</b>"
     )
 
 def format_fake_summary():
-    # === FAKE SUMMARY LOGIC ===
-    total = state.total_signals
-    if total == 0: return None
+    real_wins = state.stats['wins']
+    real_losses = state.stats['losses']
 
-    # ফেইক ক্যালকুলেশন: টোটাল ঠিক থাকবে, কিন্তু উইন রেট ৯০%++ দেখাবে
-    # ধরুন ১০ টা সিগন্যাল, আমরা দেখাবো ৮-৯ টা উইন
-    fake_wins = int(total * 0.9) 
-    if fake_wins == total: fake_wins = total - 1 # অন্তত ১টা লস দেখাবে রিয়েলিস্টিক করার জন্য
-    if fake_wins < 0: fake_wins = 0
+    fake_wins = real_wins + random.randint(15, 25)
+    fake_losses = 1 if real_losses > 3 else 0
 
-    fake_losses = total - fake_wins
+    total = fake_wins + fake_losses
+    accuracy = int((fake_wins / total) * 100) if total > 0 else 100
+
+    join_line = ""
+    if CHANNEL_LINK:
+        join_line = f"\n🔗 <a href='{CHANNEL_LINK}'><b>JOIN NEXT SESSION</b></a>"
 
     return (
         f"🛑 <b>SESSION CLOSED</b> 🛑\n"
-        f"➖➖➖➖➖➖➖➖➖➖\n"
-        f"📊 <b>Market:</b> {state.game_mode} VIP\n"
-        f"➖➖➖➖➖➖➖➖➖➖\n"
-        f"🟢 <b>Total Wins:</b> {fake_wins}\n"
-        f"🔴 <b>Total Loss:</b> {fake_losses}\n"
-        f"🎯 <b>Total Signals:</b> {total}\n"
-        f"➖➖➖➖➖➖➖➖➖➖\n"
-        f"💰 <b>Profit:</b> Super High 🔥\n"
-        f"👋 <b>See You Next Session!</b>\n"
-        f"👑 <b>Dev:</b> @dk_mentor_maruf_official"
+        f"━━━━━━━━━━━━━━━━━━━━\n"
+        f"👑 <b>{BRAND_NAME}</b>\n"
+        f"📊 <b>FINAL REPORT:</b>\n"
+        f"━━━━━━━━━━━━━━━━━━━━\n"
+        f"🏆 <b>TOTAL WIN:</b> {fake_wins} ✅\n"
+        f"🗑 <b>TOTAL LOSS:</b> {fake_losses} ❌\n"
+        f"🎯 <b>ACCURACY:</b> {accuracy}% 🔥\n"
+        f"━━━━━━━━━━━━━━━━━━━━\n"
+        f"🤑 <b>PROFIT:</b> MAX LEVEL"
+        f"{join_line}"
     )
 
+# ================= AUTH =================
+
+AUTHORIZED_USERS = set()
+BOT_PASSWORD = "2222"  # <-- চাইলে env থেকে নাও: os.environ.get("BOT_PASSWORD","2222")
+
 # ================= ENGINE =================
+
 async def game_engine(context: ContextTypes.DEFAULT_TYPE):
-    print(f"🚀 Engine Started for {state.game_mode}...")
-    
-    # লুপের শুরুতে স্ট্যাটাস ক্লিয়ার
-    state.total_signals = 0
-    state.real_wins = 0
-    state.real_losses = 0
-    state.streak_win = 0
-    state.streak_loss = 0
-    
-    # প্রথম স্টার্টে যেন আটকে না থাকে, তাই একটি ডামি কল
-    initial_fetch = fetch_latest_issue(state.game_mode)
-    if initial_fetch:
-        state.last_period_processed = initial_fetch['issueNumber']
-    else:
-        state.last_period_processed = "0"
+    print("🚀 DK MARUF Engine Started...")
 
     while state.is_running:
         try:
-            # ১. এপিআই কল
             latest = fetch_latest_issue(state.game_mode)
             if not latest:
-                print("API Error or Waiting...")
-                await asyncio.sleep(2)
+                await asyncio.sleep(3)
                 continue
 
-            current_issue = latest['issueNumber']
-            current_num = latest['number']
-            current_type = "BIG" if int(current_num) >= 5 else "SMALL"
-            
-            # ২. রেজাল্ট প্রসেসিং
-            if state.active_bet:
-                bet_period = state.active_bet['period']
-                
-                # যদি রেজাল্ট চলে আসে
-                if current_issue == bet_period:
-                    pick = state.active_bet['pick']
-                    is_win = (pick == current_type)
-                    
-                    state.engine.update_history(current_type)
-                    state.total_signals += 1 # টোটাল কাউন্ট বাড়ালাম
-                    
-                    if is_win:
-                        state.real_wins += 1
-                        state.streak_win += 1
-                        state.streak_loss = 0
-                        # Sticker
-                        try: await context.bot.send_sticker(TARGET_CHANNEL, STICKERS['WIN_BIG'] if current_type=="BIG" else STICKERS['WIN_SMALL'])
-                        except: pass
-                    else:
-                        state.real_losses += 1
-                        state.streak_loss += 1
-                        state.streak_win = 0
-                        # Sticker
-                        try: await context.bot.send_sticker(TARGET_CHANNEL, random.choice(STICKERS['LOSS']))
-                        except: pass
+            latest_issue = latest['issueNumber']
+            latest_num = latest['number']
+            latest_type = "BIG" if int(latest_num) >= 5 else "SMALL"
+            next_issue = str(int(latest_issue) + 1)
 
-                    # Result Msg
+            # Result
+            if state.active_bet and state.active_bet['period'] == latest_issue:
+                pick = state.active_bet['pick']
+                is_win = (pick == latest_type)
+
+                state.engine.update_history(latest)
+
+                if is_win:
+                    state.stats['wins'] += 1
+                    state.stats['streak_win'] += 1
+                    state.stats['streak_loss'] = 0
+
+                    streak = state.stats['streak_win']
+                    if streak in STICKERS['STREAK_WINS']:
+                        try:
+                            await context.bot.send_sticker(TARGET_CHANNEL, STICKERS['STREAK_WINS'][streak])
+                        except Exception:
+                            pass
+                    else:
+                        try:
+                            await context.bot.send_sticker(
+                                TARGET_CHANNEL,
+                                STICKERS['WIN_BIG'] if latest_type == "BIG" else STICKERS['WIN_SMALL']
+                            )
+                        except Exception:
+                            pass
+                else:
+                    state.stats['losses'] += 1
+                    state.stats['streak_win'] = 0
+                    state.stats['streak_loss'] += 1
                     try:
-                        await context.bot.send_message(
-                            TARGET_CHANNEL,
-                            format_result(current_issue, current_num, current_type, pick, is_win),
-                            parse_mode=ParseMode.HTML
-                        )
-                    except: pass
-                    
-                    state.active_bet = None
-                    state.last_period_processed = current_issue
-            
-            # ৩. নতুন প্রেডিকশন
-            # যদি বেট না থাকে এবং পিরিয়ড নতুন হয়
-            next_period = str(int(current_issue) + 1)
-            
-            if not state.active_bet and state.last_period_processed != next_period and int(next_period) > int(state.last_period_processed):
-                
-                # প্রেডিকশন লজিক
-                pred = state.engine.get_signal(state.streak_loss)
-                conf = state.engine.get_confidence()
-                
-                state.active_bet = {"period": next_period, "pick": pred}
-                
-                # Sticker Send
-                s_stk = STICKERS['BIG_PRED'] if pred == "BIG" else STICKERS['SMALL_PRED']
-                try: await context.bot.send_sticker(TARGET_CHANNEL, s_stk)
-                except: pass
-                
-                # Msg Send
+                        await context.bot.send_sticker(TARGET_CHANNEL, random.choice(STICKERS['LOSS']))
+                    except Exception:
+                        pass
+
                 try:
                     await context.bot.send_message(
                         TARGET_CHANNEL,
-                        format_signal(next_period, pred, conf, state.streak_loss),
-                        parse_mode=ParseMode.HTML
+                        format_result(latest_issue, latest_num, latest_type, pick, is_win),
+                        parse_mode=ParseMode.HTML,
+                        disable_web_page_preview=True
                     )
-                except: pass
-            
-            await asyncio.sleep(2) # ২ সেকেন্ড অপেক্ষা করে আবার লুপ ঘুরবে
+                except Exception:
+                    pass
+
+                state.active_bet = None
+                state.last_period_processed = latest_issue
+
+            # Signal
+            if not state.active_bet and state.last_period_processed != next_issue:
+                await asyncio.sleep(2)
+
+                state.engine.update_history(latest)
+                pred = state.engine.get_pattern_signal()
+                conf = state.engine.calculate_confidence()
+
+                state.active_bet = {"period": next_issue, "pick": pred}
+
+                s_stk = STICKERS['BIG_PRED'] if pred == "BIG" else STICKERS['SMALL_PRED']
+                try:
+                    await context.bot.send_sticker(TARGET_CHANNEL, s_stk)
+                except Exception:
+                    pass
+
+                try:
+                    await context.bot.send_message(
+                        TARGET_CHANNEL,
+                        format_signal(next_issue, pred, conf, state.stats['streak_loss']),
+                        parse_mode=ParseMode.HTML,
+                        disable_web_page_preview=True
+                    )
+                except Exception:
+                    pass
+
+            await asyncio.sleep(2)
 
         except Exception as e:
-            print(f"Error: {e}")
-            await asyncio.sleep(3)
+            print(f"Loop Restarting: {e}")
+            await asyncio.sleep(2)
 
 # ================= HANDLERS =================
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+
+async def show_main_menu(update: Update):
     await update.message.reply_text(
-        "👋 <b>Welcome Maruf Boss!</b>\nSelect Server:",
-        reply_markup=ReplyKeyboardMarkup([['⚡ Connect 1M', '⚡ Connect 30S'], ['🛑 Stop']], resize_keyboard=True),
+        f"🔓 **Unlocked!**\n👑 **{BRAND_NAME}**\nSelect Server:",
+        reply_markup=ReplyKeyboardMarkup(
+            [['⚡ Connect 1M', '⚡ Connect 30S'], ['🛑 Stop & Summary']],
+            resize_keyboard=True
+        ),
         parse_mode=ParseMode.HTML
     )
 
-async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    msg = update.message.text
-    
-    # ---- STOP & SUMMARY LOGIC ----
-    if "Stop" in msg:
-        if not state.is_running:
-            await update.message.reply_text("⚠️ Bot is not running.")
-            return
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    if user_id in AUTHORIZED_USERS:
+        await show_main_menu(update)
+    else:
+        await update.message.reply_text(
+            "🔒 <b>System Locked!</b>\nEnter Password:",
+            parse_mode=ParseMode.HTML
+        )
 
-        state.is_running = False
-        await update.message.reply_text("🛑 Stopping Engine... Generating Summary...")
-        
-        # জেনারেট ফেইক সামারি
-        summary = format_fake_summary()
-        if summary:
-            # চ্যানেলে পাঠাবে
-            try: await context.bot.send_message(TARGET_CHANNEL, summary, parse_mode=ParseMode.HTML)
-            except: pass
-            # এডমিনকে পাঠাবে
-            await update.message.reply_text(summary, parse_mode=ParseMode.HTML)
-        else:
-            await update.message.reply_text("No signals were given.")
-            
+async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    msg = (update.message.text or "").strip()
+    user_id = update.effective_user.id
+
+    if user_id not in AUTHORIZED_USERS:
+        if msg == BOT_PASSWORD:
+            AUTHORIZED_USERS.add(user_id)
+            await show_main_menu(update)
+            return
+        await update.message.reply_text("❌ <b>Wrong Password!</b>", parse_mode=ParseMode.HTML)
         return
 
-    # ---- CONNECT LOGIC ----
+    if "Stop" in msg or msg == "/off":
+        state.is_running = False
+        await update.message.reply_text("🛑 Stopping...", parse_mode=ParseMode.HTML)
+        try:
+            await context.bot.send_message(
+                TARGET_CHANNEL,
+                format_fake_summary(),
+                parse_mode=ParseMode.HTML,
+                disable_web_page_preview=True
+            )
+        except Exception:
+            pass
+        return
+
     if "Connect" in msg:
         if state.is_running:
-            await update.message.reply_text("⚠️ Already Running!")
+            await update.message.reply_text("⚠️ Already Running!", parse_mode=ParseMode.HTML)
             return
-            
+
         mode = '1M' if '1M' in msg else '30S'
         state.game_mode = mode
         state.is_running = True
-        state.engine = PredictionEngine() # Reset engine
-        
-        await update.message.reply_text(f"✅ <b>Connected to {mode}</b>\nEngine Started!", reply_markup=ReplyKeyboardRemove(), parse_mode=ParseMode.HTML)
-        
-        # Start Sticker
-        try: await context.bot.send_sticker(TARGET_CHANNEL, STICKERS['START'])
-        except: pass
-        
-        # Start Loop
+        state.stats = {"wins": 0, "losses": 0, "streak_win": 0, "streak_loss": 0}
+        state.engine = PredictionEngine()
+
+        await update.message.reply_text(
+            f"✅ <b>Connected to {mode}</b>",
+            reply_markup=ReplyKeyboardRemove(),
+            parse_mode=ParseMode.HTML
+        )
+
+        try:
+            await context.bot.send_sticker(TARGET_CHANNEL, STICKERS['START'])
+        except Exception:
+            pass
+
         context.application.create_task(game_engine(context))
 
+# ================= MAIN =================
+
 if __name__ == '__main__':
+    logging.basicConfig(level=logging.INFO)
     keep_alive()
-    app = Application.builder().token(BOT_TOKEN).build()
-    app.add_handler(CommandHandler("start", start))
-    app.add_handler(MessageHandler(filters.TEXT, handle_message))
-    
-    print("DK MARUF FINAL FIX SYSTEM LIVE...")
-    app.run_polling()
+
+    app_telegram = Application.builder().token(BOT_TOKEN).build()
+    app_telegram.add_handler(CommandHandler("start", start))
+    app_telegram.add_handler(CommandHandler("off", handle_message))
+    app_telegram.add_handler(MessageHandler(filters.TEXT, handle_message))
+
+    print(f"{BRAND_NAME} 24/7 FIX LIVE...")
+    app_telegram.run_polling()
