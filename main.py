@@ -12,7 +12,6 @@ from telegram.constants import ParseMode
 from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandler, filters
 
 # ================= CONFIGURATION =================
-# ⚠️ Public GitHub এ commit করলে token leak হবে. Private repo best.
 BOT_TOKEN = "8595453345:AAGMYQFxohNbvz16cZTcP8HF2mqydRMZjMI"
 
 TARGET_CHANNEL = -1003293007059
@@ -39,7 +38,7 @@ STICKERS = {
         7: "CAACAgUAAxkBAAEQTiVpcmUhha9HAAF19fboYayfUrm3tdYAAioXAAIHgKhUD0QmGyF5Aug4BA",
         8: "CAACAgUAAxkBAAEQTixpcmUmevnNEqUbr0qbbVgW4psMNQACMxUAAow-qFSnSz4Ik1ddNzgE",
         9: "CAACAgUAAxkBAAEQTi1pcmUmpSxAHo2pvR-GjCPTmkLr0AACLh0AAhCRqFRH5-2YyZKq1jgE",
-        10: "CAACAgUAAxkBAAEQTi5pcmUmjmjp7oXg4InxI1dGYruxDwACqBgAAh19qVT6X_-oEywCkzgE"
+        10:"CAACAgUAAxkBAAEQTi5pcmUmjmjp7oXg4InxI1dGYruxDwACqBgAAh19qVT6X_-oEywCkzgE"
     },
     'START': "CAACAgUAAxkBAAEQTjJpcmWOexDHyK90IXQU5Qzo18uBKAACwxMAAlD6QFRRMClp8Q4JAAE4BA"
 }
@@ -48,7 +47,7 @@ STICKERS = {
 API_1M = "https://draw.ar-lottery01.com/WinGo/WinGo_1M/GetHistoryIssuePage.json"
 API_30S = "https://draw.ar-lottery01.com/WinGo/WinGo_30S/GetHistoryIssuePage.json"
 
-# ================= FLASK SERVER (KEEP ALIVE) =================
+# ================= FLASK SERVER =================
 app = Flask('')
 
 @app.route('/')
@@ -69,87 +68,86 @@ def keep_alive():
 # ================= PREDICTION ENGINE =================
 class PredictionEngine:
     def __init__(self):
-        self.history = []       # ["BIG","SMALL"...]
-        self.raw_history = []   # raw issues list
-        self.last_prediction = None  # ✅ NEW (for anti-trap)
+        self.history = []
+        self.raw_history = []
+        self.last_prediction = None
 
     def update_history(self, issue_data):
-        """
-        issue_data: {"issueNumber":..., "number":...}
-        newest first রাখে, duplicate avoid করে।
-        """
         try:
             number = int(issue_data['number'])
             result_type = "BIG" if number >= 5 else "SMALL"
         except Exception:
             return
 
-        # duplicate avoid (same issueNumber)
         if (not self.raw_history) or (str(self.raw_history[0].get('issueNumber')) != str(issue_data.get('issueNumber'))):
             self.history.insert(0, result_type)
             self.raw_history.insert(0, issue_data)
-
             self.history = self.history[:60]
             self.raw_history = self.raw_history[:60]
 
-    # ✅ তোমার দেওয়া prediction logic
-    def get_pattern_signal(self, current_streak_loss: int):
-        # ইতিহাস খুব ছোট হলে র‍্যান্ডম দিবে
-        if len(self.history) < 5:
-            prediction = random.choice(["BIG", "SMALL"])
-            self.last_prediction = prediction
-            return prediction
+    # ✅ তোমার Voting System logic
+    def get_pattern_signal(self, current_streak_loss):
+        # ইতিহাস না থাকলে র‍্যান্ডম
+        if len(self.history) < 6:
+            final_prediction = random.choice(["BIG", "SMALL"])
+            self.last_prediction = final_prediction
+            return final_prediction
 
-        last_6 = self.history[:6]  # গত ৬টি রেজাল্ট
-        prediction = None
+        last_6 = self.history[:6]
+        signals = []
 
-        # =========================================
-        # 🛡️ লজিক ১: ANTI-TRAP (লস রিকভারি সিস্টেম)
-        # =========================================
-        if current_streak_loss >= 2:
-            if self.last_prediction == "BIG":
-                prediction = "SMALL"
-            elif self.last_prediction == "SMALL":
-                prediction = "BIG"
-            else:
-                prediction = "SMALL" if last_6[0] == "BIG" else "BIG"
-
-            self.last_prediction = prediction
-            return prediction
-
-        # =========================================
-        # 🐉 লজিক ২: DRAGON / STREAK (টানা একই আসলে)
-        # =========================================
-        if len(last_6) >= 3 and (last_6[0] == last_6[1] == last_6[2]):
-            prediction = last_6[0]
-
-        # =========================================
-        # ⚡ লজিক ৩: ZIG-ZAG
-        # =========================================
-        elif len(last_6) >= 3 and (last_6[0] != last_6[1]) and (last_6[1] != last_6[2]):
-            prediction = "SMALL" if last_6[0] == "BIG" else "BIG"
-
-        # =========================================
-        # 🎲 লজিক ৪: TWO-TWO
-        # =========================================
-        elif len(last_6) >= 3 and (last_6[0] == last_6[1]) and (last_6[2] != last_6[0]):
-            prediction = last_6[0]
-
-        # =========================================
-        # 🧮 লজিক ৫: MATH FALLBACK
-        # =========================================
+        # ==========================================
+        # ১. Trend Logic (গড় হিসাব)
+        # ==========================================
+        big_count = last_6.count("BIG")
+        small_count = last_6.count("SMALL")
+        if big_count > small_count:
+            signals.append("BIG")
         else:
-            try:
-                last_num = int(self.raw_history[0]['number'])
-                period_last_digit = int(str(self.raw_history[0]['issueNumber'])[-1])
-                total = last_num + period_last_digit
+            signals.append("SMALL")
 
-                prediction = "SMALL" if (total % 2 == 0) else "BIG"
-            except:
-                prediction = random.choice(["BIG", "SMALL"])
+        # ==========================================
+        # ২. Pattern Logic (ড্রাগন বা জিগজ্যাগ)
+        # ==========================================
+        if last_6[0] == last_6[1] == last_6[2]:  # Dragon
+            signals.append(last_6[0])
+        elif last_6[0] != last_6[1] and last_6[1] != last_6[2]:  # ZigZag
+            signals.append("SMALL" if last_6[0] == "BIG" else "BIG")
+        else:
+            signals.append(last_6[0])  # ডিফল্ট
 
-        self.last_prediction = prediction
-        return prediction
+        # ==========================================
+        # ৩. Math Logic (পিরিয়ড + নাম্বার)
+        # ==========================================
+        try:
+            last_issue_digit = int(str(self.raw_history[0].get('issueNumber', '0'))[-1])
+            last_result_num = int(self.raw_history[0].get('number', '0'))
+            total = last_issue_digit + last_result_num
+            math_sig = "SMALL" if total % 2 == 0 else "BIG"
+            signals.append(math_sig)
+        except:
+            signals.append(random.choice(["BIG", "SMALL"]))
+
+        # ==========================================
+        # ৪. FINAL DECISION (Voting System)
+        # ==========================================
+        # tie-safe: যদি vote tie হয়, last_6[0] follow
+        try:
+            final_prediction = max(set(signals), key=signals.count)
+            # যদি signals এ count tie হয় (rare), তখন last result follow
+            if signals.count("BIG") == signals.count("SMALL"):
+                final_prediction = last_6[0]
+        except:
+            final_prediction = last_6[0]
+
+        # ==========================================
+        # ৫. LOSS RECOVERY (Stop Loss)
+        # ==========================================
+        if current_streak_loss >= 2:
+            final_prediction = "SMALL" if final_prediction == "BIG" else "BIG"
+
+        self.last_prediction = final_prediction
+        return final_prediction
 
     def calculate_confidence(self):
         try:
@@ -172,7 +170,7 @@ class BotState:
 
 state = BotState()
 
-# ================= REQUESTS + MULTI-GATEWAY (ANTI BLOCK) =================
+# ================= API FETCH (requests + to_thread + gateways) =================
 def _fetch_one(url: str, headers: dict, timeout: float):
     r = requests.get(url, headers=headers, timeout=timeout)
     if r.status_code != 200:
@@ -195,7 +193,7 @@ async def fetch_latest_issue(mode: str):
     ]
 
     headers = {
-        "User-Agent": f"Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/{random.randint(110, 123)}.0.0.0 Safari/537.36",
+        "User-Agent": f"Mozilla/5.0 Chrome/{random.randint(110, 123)}.0.0.0 Safari/537.36",
         "Referer": "https://dkwin9.com/",
         "Accept": "application/json",
         "Cache-Control": "no-cache",
@@ -288,8 +286,6 @@ AUTHORIZED_USERS = set()
 
 # ================= ENGINE =================
 async def game_engine(context: ContextTypes.DEFAULT_TYPE, my_session_id: int):
-    print(f"🚀 {BRAND_NAME} Engine Started (Session: {my_session_id})...")
-
     fail_count = 0
 
     while state.is_running and state.session_id == my_session_id:
@@ -297,7 +293,7 @@ async def game_engine(context: ContextTypes.DEFAULT_TYPE, my_session_id: int):
             latest = await fetch_latest_issue(state.game_mode)
 
             if not latest:
-                # ✅ NO OFFLINE/AUTO SIGNAL — শুধু retry
+                # ✅ no offline/auto signal
                 fail_count += 1
                 base_wait = 1 if state.game_mode == '30S' else 2
                 await asyncio.sleep(min(base_wait + fail_count, 10))
@@ -310,7 +306,7 @@ async def game_engine(context: ContextTypes.DEFAULT_TYPE, my_session_id: int):
             latest_type = "BIG" if int(latest_num) >= 5 else "SMALL"
             next_issue = str(int(latest_issue) + 1)
 
-            # -------- RESULT --------
+            # Result
             if state.active_bet and state.active_bet['period'] == latest_issue:
                 if state.last_period_processed == latest_issue:
                     await asyncio.sleep(1)
@@ -331,13 +327,8 @@ async def game_engine(context: ContextTypes.DEFAULT_TYPE, my_session_id: int):
                         try: await context.bot.send_sticker(TARGET_CHANNEL, STICKERS['STREAK_WINS'][streak])
                         except: pass
                     else:
-                        try:
-                            await context.bot.send_sticker(
-                                TARGET_CHANNEL,
-                                STICKERS['WIN_BIG'] if latest_type == "BIG" else STICKERS['WIN_SMALL']
-                            )
-                        except:
-                            pass
+                        try: await context.bot.send_sticker(TARGET_CHANNEL, STICKERS['WIN_BIG'] if latest_type == "BIG" else STICKERS['WIN_SMALL'])
+                        except: pass
                 else:
                     state.stats['losses'] += 1
                     state.stats['streak_win'] = 0
@@ -358,10 +349,9 @@ async def game_engine(context: ContextTypes.DEFAULT_TYPE, my_session_id: int):
                 state.active_bet = None
                 state.last_period_processed = latest_issue
 
-            # -------- SIGNAL --------
+            # Signal
             if not state.active_bet and state.last_period_processed != next_issue:
-                buffer_time = 1 if state.game_mode == '30S' else 2
-                await asyncio.sleep(buffer_time)
+                await asyncio.sleep(1 if state.game_mode == '30S' else 2)
 
                 if state.session_id != my_session_id:
                     return
@@ -449,7 +439,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             reply_markup=ReplyKeyboardRemove(),
             parse_mode=ParseMode.HTML
         )
-
         try: await context.bot.send_sticker(TARGET_CHANNEL, STICKERS['START'])
         except: pass
 
