@@ -70,57 +70,92 @@ def keep_alive():
     t.daemon = True
     t.start()
 
-# ================= PREDICTION LOGIC (SMART RECOVERY / AUTO-FLIP) =================
+# ================= ULTIMATE PREDICTION ENGINE (TREND + MATH + ANTI-TRAP + SAFE) =================
+
 class PredictionEngine:
     def __init__(self):
-        self.history = []
-        self.raw_history = []
+        self.history = []        # ["BIG","SMALL",...]
+        self.raw_history = []    # full issue dicts
 
     def update_history(self, issue_data):
-        number = int(issue_data['number'])
-        result_type = "BIG" if number >= 5 else "SMALL"
+        """
+        issue_data must contain: issueNumber, number
+        """
+        try:
+            number = int(issue_data['number'])
+            result_type = "BIG" if number >= 5 else "SMALL"
+        except Exception:
+            return
 
-        if (not self.raw_history) or (self.raw_history[0]['issueNumber'] != issue_data['issueNumber']):
+        # avoid duplicate insert
+        if (not self.raw_history) or (self.raw_history[0].get('issueNumber') != issue_data.get('issueNumber')):
             self.history.insert(0, result_type)
             self.raw_history.insert(0, issue_data)
+
+            # keep last 50
             self.history = self.history[:50]
             self.raw_history = self.raw_history[:50]
 
-    # ✅ এখানে streak_loss ইনপুট নেয়
     def get_pattern_signal(self, current_streak_loss: int):
-        # ডাটা কম থাকলে র‍্যান্ডম
+        """
+        current_streak_loss: state.stats['streak_loss']
+        returns: "BIG" / "SMALL"
+        """
+
+        # ✅ SAFETY GUARD
         if len(self.history) < 10 or len(self.raw_history) < 1:
             return random.choice(["BIG", "SMALL"])
 
         last_6 = self.history[:6]
         prediction = None
 
-        # === A) Main Pattern Logic ===
+        # ================= STEP 1: TREND / PATTERN ANALYSIS =================
 
-        # 1) Dragon: টানা ৩ বার একই -> trend follow
+        # 1) Dragon Pattern: টানা ৩ বার একই => trend follow
         if len(last_6) >= 3 and last_6[0] == last_6[1] == last_6[2]:
             prediction = last_6[0]
 
-        # 2) ZigZag: একবার এটা একবার ওটা -> alternate
+        # 2) ZigZag Pattern: BIG/SMALL alternate => inverse next
         elif len(last_6) >= 3 and (last_6[0] != last_6[1] and last_6[1] != last_6[2]):
             prediction = "SMALL" if last_6[0] == "BIG" else "BIG"
 
-        # 3) Math Trend fallback
-        else:
-            last_num = int(self.raw_history[0]['number'])
-            period_digit = int(str(self.raw_history[0]['issueNumber'])[-1])
-            math_val = (last_num + period_digit) % 2
-            prediction = "BIG" if math_val == 1 else "SMALL"
+        # 3) AABB Pattern: A A B B => সাধারণত break / flip
+        elif len(last_6) >= 4 and (last_6[0] == last_6[1] and last_6[2] == last_6[3] and last_6[1] != last_6[2]):
+            prediction = "SMALL" if last_6[0] == "BIG" else "BIG"
 
-        # === B) Auto Inverse Logic (THE FIX) ===
-        # টানা ২ বার লস হলে prediction উল্টে দিবে
-        if current_streak_loss >= 2:
+        # ================= STEP 2: MATH FORMULA FALLBACK =================
+        else:
+            try:
+                last_num = int(self.raw_history[0]['number'])
+                period_digit = int(str(self.raw_history[0]['issueNumber'])[-1])
+
+                # ✅ stable mixed formula (not too random)
+                calc = (last_num * 3 + period_digit * 7)
+                math_result = calc % 10
+
+                prediction = "BIG" if math_result >= 5 else "SMALL"
+            except Exception:
+                prediction = random.choice(["BIG", "SMALL"])
+
+        # ================= STEP 3: ANTI-TRAP / AUTO-INVERSE =================
+        # টানা ২ বার লস হলে -> সিগন্যাল উল্টে দাও
+        if int(current_streak_loss) >= 2:
             return "SMALL" if prediction == "BIG" else "BIG"
 
         return prediction
 
     def calculate_confidence(self):
-        return random.randint(90, 99)
+        """
+        Marketing-friendly but cleaner confidence
+        """
+        try:
+            # Dragon strong => higher
+            if len(self.history) >= 3 and self.history[0] == self.history[1] == self.history[2]:
+                return random.randint(92, 97)
+        except Exception:
+            pass
+
+        return random.randint(86, 91)
 
 # ================= BOT STATE =================
 
