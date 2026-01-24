@@ -51,7 +51,6 @@ def home():
     return "DK MARUF ENGINE RUNNING..."
 
 def run_http():
-    # পোর্ট ফিক্স যাতে সার্ভার বন্ধ না করে দেয়
     port = int(os.environ.get("PORT", 8080))
     try:
         app.run(host='0.0.0.0', port=port)
@@ -61,7 +60,7 @@ def keep_alive():
     t = Thread(target=run_http)
     t.start()
 
-# ================= BIG COMMUNITY LOGIC (INTEGRATED) =================
+# ================= SMART PREDICTION ENGINE (UPDATED) =================
 class PredictionEngine:
     def __init__(self):
         self.history = [] 
@@ -77,30 +76,45 @@ class PredictionEngine:
             self.history = self.history[:50] 
             self.raw_history = self.raw_history[:50]
 
-    def get_pattern_signal(self):
-        # === BIG COMMUNITY LOGIC IMPLEMENTATION ===
-        if len(self.history) < 6:
+    def get_pattern_signal(self, current_streak_loss):
+        # ডাটা কম থাকলে র‍্যান্ডম
+        if len(self.history) < 10:
             return random.choice(["BIG", "SMALL"])
         
         last_6 = self.history[:6]
-        
-        # 1. Dragon Pattern (টানা ৩ বার একই) -> Trend Follow
-        if last_6[0] == last_6[1] == last_6[2]:
-            return last_6[0] 
-            
-        # 2. ZigZag Pattern (1-1-1) -> Alternate
-        if last_6[0] != last_6[1] and last_6[1] != last_6[2]:
-            # জিগজ্যাগ চললে প্যাটার্ন বজায় রাখবে
-            return "SMALL" if last_6[0] == "BIG" else "BIG"
+        prediction = ""
 
-        # 3. AABB Pattern (Two-Two) -> Pattern Break
-        if last_6[0] == last_6[1] and last_6[2] == last_6[3] and last_6[1] != last_6[2]:
-            # AABB শেষ হলে সাধারণত জিগজ্যাগ শুরু হয়
-            return "SMALL" if last_6[0] == "BIG" else "BIG"
+        # === A. মেইন লজিক (Pattern Analysis) ===
+        
+        # 1. Dragon Catch (টানা ৩ বার একই হলে ট্রেন্ড ধরবো)
+        if last_6[0] == last_6[1] == last_6[2]:
+            prediction = last_6[0]
             
-        # 4. Default -> Trend Majority
-        big_count = last_6.count("BIG")
-        return "BIG" if big_count >= 3 else "SMALL"
+        # 2. ZigZag Catch (একবার এটা একবার ওটা)
+        elif last_6[0] != last_6[1] and last_6[1] != last_6[2]:
+            prediction = "SMALL" if last_6[0] == "BIG" else "BIG"
+
+        # 3. Math Trend (যদি প্যাটার্ন না থাকে - ডিফল্ট)
+        else:
+            try:
+                last_num = int(self.raw_history[0]['number'])
+                period_digit = int(str(self.raw_history[0]['issueNumber'])[-1])
+                # (Last Num + Period) % 2 Logic
+                math_val = (last_num + period_digit) % 2
+                prediction = "BIG" if math_val == 1 else "SMALL"
+            except:
+                prediction = random.choice(["BIG", "SMALL"])
+
+        # === B. অটো ইনভার্স লজিক (SMART RECOVERY) ===
+        # যদি দেখি টানা ২ বার বা তার বেশি লস হয়েছে, তার মানে মার্কেট উল্টো চলছে।
+        # তখন আমরাও প্রেডিকশন উল্টে দিবো।
+        
+        if current_streak_loss >= 2:
+            # লস রিকভার করার জন্য সিগন্যাল উল্টে যাবে
+            print(f"⚠️ Trap Market Detected! Flipping Signal from {prediction}...")
+            return "SMALL" if prediction == "BIG" else "BIG"
+        
+        return prediction
 
     def calculate_confidence(self):
         return random.randint(90, 99)
@@ -198,7 +212,7 @@ def format_result(issue, res_num, res_type, my_pick, is_win):
 
 # ================= 24/7 AUTO-RESTART ENGINE =================
 async def game_engine(context: ContextTypes.DEFAULT_TYPE):
-    print("🚀 DK Maruf Engine (Big Comm. Logic) Started...")
+    print("🚀 DK Maruf Engine (Smart Recovery Logic) Started...")
     
     while state.is_running:
         try:
@@ -261,8 +275,9 @@ async def game_engine(context: ContextTypes.DEFAULT_TYPE):
                 await asyncio.sleep(2)
                 state.engine.update_history(latest)
                 
-                # USING BIG COMMUNITY LOGIC HERE
-                pred = state.engine.get_pattern_signal()
+                # ==== UPDATED CALL HERE FOR SMART RECOVERY ====
+                # আমরা current loss streak পাঠাচ্ছি যাতে ইনভার্স লজিক কাজ করে
+                pred = state.engine.get_pattern_signal(state.stats['streak_loss'])
                 conf = state.engine.calculate_confidence()
                 
                 state.active_bet = {"period": next_issue, "pick": pred}
@@ -286,7 +301,7 @@ async def game_engine(context: ContextTypes.DEFAULT_TYPE):
             
         except Exception as e:
             print(f"Loop Restarting: {e}")
-            await asyncio.sleep(2) # ক্র্যাশ করলে ২ সেকেন্ড পর অটো রিস্টার্ট হবে
+            await asyncio.sleep(2)
 
 # ================= HANDLERS =================
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -313,9 +328,11 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         state.game_mode = mode
         state.is_running = True
         state.stats = {"wins":0, "losses":0, "streak_win":0, "streak_loss":0}
+        
+        # Reset Engine
         state.engine = PredictionEngine()
         
-        await update.message.reply_text(f"✅ <b>Connected to {mode}</b>\nWait for signals...", reply_markup=ReplyKeyboardRemove(), parse_mode=ParseMode.HTML)
+        await update.message.reply_text(f"✅ <b>Connected to {mode}</b>\nSmart Recovery Active...", reply_markup=ReplyKeyboardRemove(), parse_mode=ParseMode.HTML)
         try: await context.bot.send_sticker(TARGET_CHANNEL, STICKERS['START'])
         except: pass
         
@@ -327,5 +344,5 @@ if __name__ == '__main__':
     app.add_handler(CommandHandler("start", start))
     app.add_handler(MessageHandler(filters.TEXT, handle_message))
     
-    print("DK MARUF with BIG COMMUNITY LOGIC LIVE...")
+    print("DK MARUF with SMART RECOVERY LOGIC LIVE...")
     app.run_polling()
