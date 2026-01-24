@@ -14,10 +14,10 @@ from flask import Flask
 
 BOT_TOKEN = "8595453345:AAGndyFZES2qZL37LRc3CeqGxKyWq7HeTxk"  # <-- আপনার টোকেন দিন
 TARGET_CHANNEL = -1003293007059            # <-- আপনার চ্যানেল আইডি
-BRAND_NAME = "DK MARUF VIP SYSTEM"         # <-- মারুফ ব্র্যান্ডিং
+BRAND_NAME = "𝐃𝐊 𝐌𝐀𝐑𝐔𝐅 𝐎𝐅𝐅𝐈𝐂𝐈𝐀𝐋 𝟐𝟒/𝟕 𝐒𝐈𝐆𝐍𝐀𝐋🌈™"         # <-- মারুফ ব্র্যান্ডিং
 
 # (Optional) যদি তুমি ফরম্যাটে লিংক দিতে চাও
-CHANNEL_LINK = "https://t.me/dk_mentor_maruf_official"
+CHANNEL_LINK = "https://t.me/big_maruf_official0"
 
 # ================= STICKER DATABASE =================
 
