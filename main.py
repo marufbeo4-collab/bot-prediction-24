@@ -11,14 +11,11 @@ from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandl
 from flask import Flask
 
 # ================= CONFIGURATION (ENV থেকে নিবে) =================
-BOT_TOKEN = os.getenv("BOT_TOKEN", "").strip()
-TARGET_CHANNEL = int(os.getenv("TARGET_CHANNEL", "0"))
-BRAND_NAME = os.getenv("BRAND_NAME", "VIP BOT")
-CHANNEL_LINK = os.getenv("CHANNEL_LINK", "")
-BOT_PASSWORD = os.getenv("BOT_PASSWORD", "2222")
-
-if not BOT_TOKEN:
-    raise RuntimeError("BOT_TOKEN missing! Set it in Render Environment Variables.")
+BOT_TOKEN = "8595453345:AAGMYQFxohNbvz16cZTcP8HF2mqydRMZjMI"
+TARGET_CHANNEL = -1003293007059
+BRAND_NAME = "𝐃𝐊 𝐌𝐀𝐑𝐔𝐅 𝐎𝐅𝐅𝐈𝐂𝐈𝐀𝐋 𝟐𝟒/𝟕 𝐒𝐈𝐆𝐍𝐀𝐋"
+CHANNEL_LINK = "https://t.me/big_maruf_official0"
+BOT_PASSWORD = "2222"
 
 # ================= STICKER DATABASE =================
 STICKERS = {
