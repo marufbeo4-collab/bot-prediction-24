@@ -70,8 +70,7 @@ def keep_alive():
     t.daemon = True
     t.start()
 
-# ================= LOGIC =================
-
+# ================= PREDICTION LOGIC (SMART RECOVERY / AUTO-FLIP) =================
 class PredictionEngine:
     def __init__(self):
         self.history = []
@@ -87,28 +86,38 @@ class PredictionEngine:
             self.history = self.history[:50]
             self.raw_history = self.raw_history[:50]
 
-    def get_pattern_signal(self):
-        # === BIG COMMUNITY LOGIC IMPLEMENTATION (Maruf variant) ===
-        if len(self.history) < 6:
+    # ✅ এখানে streak_loss ইনপুট নেয়
+    def get_pattern_signal(self, current_streak_loss: int):
+        # ডাটা কম থাকলে র‍্যান্ডম
+        if len(self.history) < 10 or len(self.raw_history) < 1:
             return random.choice(["BIG", "SMALL"])
 
         last_6 = self.history[:6]
+        prediction = None
 
-        # 1) Dragon Pattern (3 same) -> Trend Follow
-        if last_6[0] == last_6[1] == last_6[2]:
-            return last_6[0]
+        # === A) Main Pattern Logic ===
 
-        # 2) ZigZag Pattern -> Alternate
-        if last_6[0] != last_6[1] and last_6[1] != last_6[2]:
-            return "SMALL" if last_6[0] == "BIG" else "BIG"
+        # 1) Dragon: টানা ৩ বার একই -> trend follow
+        if len(last_6) >= 3 and last_6[0] == last_6[1] == last_6[2]:
+            prediction = last_6[0]
 
-        # 3) AABB Pattern -> Pattern Break
-        if last_6[0] == last_6[1] and last_6[2] == last_6[3] and last_6[1] != last_6[2]:
-            return "SMALL" if last_6[0] == "BIG" else "BIG"
+        # 2) ZigZag: একবার এটা একবার ওটা -> alternate
+        elif len(last_6) >= 3 and (last_6[0] != last_6[1] and last_6[1] != last_6[2]):
+            prediction = "SMALL" if last_6[0] == "BIG" else "BIG"
 
-        # 4) Default -> Majority
-        big_count = last_6.count("BIG")
-        return "BIG" if big_count >= 3 else "SMALL"
+        # 3) Math Trend fallback
+        else:
+            last_num = int(self.raw_history[0]['number'])
+            period_digit = int(str(self.raw_history[0]['issueNumber'])[-1])
+            math_val = (last_num + period_digit) % 2
+            prediction = "BIG" if math_val == 1 else "SMALL"
+
+        # === B) Auto Inverse Logic (THE FIX) ===
+        # টানা ২ বার লস হলে prediction উল্টে দিবে
+        if current_streak_loss >= 2:
+            return "SMALL" if prediction == "BIG" else "BIG"
+
+        return prediction
 
     def calculate_confidence(self):
         return random.randint(90, 99)
@@ -315,7 +324,7 @@ async def game_engine(context: ContextTypes.DEFAULT_TYPE):
                 await asyncio.sleep(2)
 
                 state.engine.update_history(latest)
-                pred = state.engine.get_pattern_signal()
+                pred = state.engine.get_pattern_signal(state.stats['streak_loss'])
                 conf = state.engine.calculate_confidence()
 
                 state.active_bet = {"period": next_issue, "pick": pred}
