@@ -1,9 +1,9 @@
 import asyncio
 import logging
 import random
-import requests
 import time
 import os
+import httpx  # <--- requests এর বদলে httpx ব্যবহার করা হয়েছে
 from threading import Thread
 from telegram import Update, ReplyKeyboardMarkup, ReplyKeyboardRemove
 from telegram.constants import ParseMode
@@ -12,11 +12,9 @@ from flask import Flask
 
 # ================= CONFIGURATION =================
 
-BOT_TOKEN = "8595453345:AAGndyFZES2qZL37LRc3CeqGxKyWq7HeTxk"  # <-- আপনার টোকেন দিন
-TARGET_CHANNEL = -1003293007059            # <-- আপনার চ্যানেল আইডি
-BRAND_NAME = "𝐃𝐊 𝐌𝐀𝐑𝐔𝐅 𝐎𝐅𝐅𝐈𝐂𝐈𝐀𝐋 𝟐𝟒/𝟕 𝐒𝐈𝐆𝐍𝐀𝐋🌈™"         # <-- মারুফ ব্র্যান্ডিং
-
-# (Optional) যদি তুমি ফরম্যাটে লিংক দিতে চাও
+BOT_TOKEN = "8595453345:AAGndyFZES2qZL37LRc3CeqGxKyWq7HeTxk"  
+TARGET_CHANNEL = -1003293007059             
+BRAND_NAME = "𝐃𝐊 𝐌𝐀𝐑𝐔𝐅 𝐎𝐅𝐅𝐈𝐂𝐈𝐀𝐋 𝟐𝟒/𝟕 𝐒𝐈𝐆𝐍𝐀𝐋🌈™"         
 CHANNEL_LINK = "https://t.me/big_maruf_official0"
 
 # ================= STICKER DATABASE =================
@@ -58,7 +56,6 @@ def home():
     return "DK MARUF ENGINE RUNNING..."
 
 def run_http():
-    # পোর্ট ফিক্স যাতে সার্ভার বন্ধ না করে দেয়
     port = int(os.environ.get("PORT", 8080))
     try:
         app.run(host='0.0.0.0', port=port)
@@ -70,7 +67,7 @@ def keep_alive():
     t.daemon = True
     t.start()
 
-# ================= ULTIMATE PREDICTION ENGINE (TREND + MATH + ANTI-TRAP + SAFE) =================
+# ================= ULTIMATE PREDICTION ENGINE =================
 
 class PredictionEngine:
     def __init__(self):
@@ -78,9 +75,6 @@ class PredictionEngine:
         self.raw_history = []    # full issue dicts
 
     def update_history(self, issue_data):
-        """
-        issue_data must contain: issueNumber, number
-        """
         try:
             number = int(issue_data['number'])
             result_type = "BIG" if number >= 5 else "SMALL"
@@ -91,70 +85,43 @@ class PredictionEngine:
         if (not self.raw_history) or (self.raw_history[0].get('issueNumber') != issue_data.get('issueNumber')):
             self.history.insert(0, result_type)
             self.raw_history.insert(0, issue_data)
-
-            # keep last 50
             self.history = self.history[:50]
             self.raw_history = self.raw_history[:50]
 
     def get_pattern_signal(self, current_streak_loss: int):
-        """
-        current_streak_loss: state.stats['streak_loss']
-        returns: "BIG" / "SMALL"
-        """
-
-        # ✅ SAFETY GUARD
         if len(self.history) < 10 or len(self.raw_history) < 1:
             return random.choice(["BIG", "SMALL"])
 
         last_6 = self.history[:6]
         prediction = None
 
-        # ================= STEP 1: TREND / PATTERN ANALYSIS =================
-
-        # 1) Dragon Pattern: টানা ৩ বার একই => trend follow
         if len(last_6) >= 3 and last_6[0] == last_6[1] == last_6[2]:
             prediction = last_6[0]
-
-        # 2) ZigZag Pattern: BIG/SMALL alternate => inverse next
         elif len(last_6) >= 3 and (last_6[0] != last_6[1] and last_6[1] != last_6[2]):
             prediction = "SMALL" if last_6[0] == "BIG" else "BIG"
-
-        # 3) AABB Pattern: A A B B => সাধারণত break / flip
         elif len(last_6) >= 4 and (last_6[0] == last_6[1] and last_6[2] == last_6[3] and last_6[1] != last_6[2]):
             prediction = "SMALL" if last_6[0] == "BIG" else "BIG"
-
-        # ================= STEP 2: MATH FORMULA FALLBACK =================
         else:
             try:
                 last_num = int(self.raw_history[0]['number'])
                 period_digit = int(str(self.raw_history[0]['issueNumber'])[-1])
-
-                # ✅ stable mixed formula (not too random)
                 calc = (last_num * 3 + period_digit * 7)
                 math_result = calc % 10
-
                 prediction = "BIG" if math_result >= 5 else "SMALL"
             except Exception:
                 prediction = random.choice(["BIG", "SMALL"])
 
-        # ================= STEP 3: ANTI-TRAP / AUTO-INVERSE =================
-        # টানা ২ বার লস হলে -> সিগন্যাল উল্টে দাও
         if int(current_streak_loss) >= 2:
             return "SMALL" if prediction == "BIG" else "BIG"
 
         return prediction
 
     def calculate_confidence(self):
-        """
-        Marketing-friendly but cleaner confidence
-        """
         try:
-            # Dragon strong => higher
             if len(self.history) >= 3 and self.history[0] == self.history[1] == self.history[2]:
                 return random.randint(92, 97)
         except Exception:
             pass
-
         return random.randint(86, 91)
 
 # ================= BOT STATE =================
@@ -170,17 +137,18 @@ class BotState:
 
 state = BotState()
 
-# ================= API FETCH (ROBUST) =================
+# ================= API FETCH (FIXED WITH HTTPX) =================
 
-def fetch_latest_issue(mode):
+async def fetch_latest_issue(mode):
+    """
+    FIXED: Uses AsyncClient to prevent blocking the event loop
+    """
     base_url = API_1M if mode == '1M' else API_30S
 
     proxies = [
         f"{base_url}?t={int(time.time()*1000)}",
-        f"https://corsproxy.io/?{base_url}?t={int(time.time()*1000)}",
-        f"https://api.allorigins.win/raw?url={base_url}",
-        f"https://thingproxy.freeboard.io/fetch/{base_url}",
-        f"https://api.codetabs.com/v1/proxy?quest={base_url}"
+        f"https://api.codetabs.com/v1/proxy?quest={base_url}",
+        f"https://corsproxy.io/?{base_url}?t={int(time.time()*1000)}"
     ]
 
     headers = {
@@ -189,36 +157,32 @@ def fetch_latest_issue(mode):
         "Origin": "https://dkwin9.com"
     }
 
-    for url in proxies:
-        try:
-            response = requests.get(url, headers=headers, timeout=5)
-            if response.status_code == 200:
-                data = response.json()
-                if data and "data" in data and "list" in data["data"]:
-                    return data["data"]["list"][0]
-        except Exception:
-            continue
-
+    async with httpx.AsyncClient(timeout=10.0, follow_redirects=True) as client:
+        for url in proxies:
+            try:
+                response = await client.get(url, headers=headers)
+                if response.status_code == 200:
+                    data = response.json()
+                    if data and "data" in data and "list" in data["data"]:
+                        return data["data"]["list"][0]
+            except Exception:
+                continue
+    
     return None
 
-# ================= FORMATTING (DK MARUF STYLE) =================
+# ================= FORMATTING =================
 
 def format_signal(issue, prediction, conf, streak_loss):
     emoji = "🟢" if prediction == "BIG" else "🔴"
-
     lvl = streak_loss + 1
-    multiplier = 3 ** (lvl - 1)  # 1, 3, 9...
-
+    multiplier = 3 ** (lvl - 1)
     plan_text = "Start (1X)"
     if lvl > 1:
         plan_text = f"⚠️ Recovery Step {lvl} ({multiplier}X)"
     if lvl > 4:
         plan_text = f"🔥 DO OR DIE ({multiplier}X)"
-
-    join_line = ""
-    if CHANNEL_LINK:
-        join_line = f"\n🔗 <a href='{CHANNEL_LINK}'><b>JOIN VIP CHANNEL</b></a>"
-
+    
+    join_line = f"\n🔗 <a href='{CHANNEL_LINK}'><b>JOIN VIP CHANNEL</b></a>" if CHANNEL_LINK else ""
     return (
         f" <b>{BRAND_NAME}</b> \n"
         f"━━━━━━━━━━━━━━━━━━━━\n"
@@ -236,7 +200,7 @@ def format_result(issue, res_num, res_type, my_pick, is_win):
     res_emoji = "🟢" if res_type == "BIG" else "🔴"
     if int(res_num) in [0, 5]:
         res_emoji = "🟣"
-
+    
     if is_win:
         header = "✅ <b>ＷＩＮ ＷＩＮ ＷＩＮ</b> ✅"
         status = "🔥 <b>PREDICTION PASSED</b>"
@@ -259,16 +223,11 @@ def format_result(issue, res_num, res_type, my_pick, is_win):
 def format_fake_summary():
     real_wins = state.stats['wins']
     real_losses = state.stats['losses']
-
     fake_wins = real_wins + random.randint(15, 25)
     fake_losses = 1 if real_losses > 3 else 0
-
     total = fake_wins + fake_losses
     accuracy = int((fake_wins / total) * 100) if total > 0 else 100
-
-    join_line = ""
-    if CHANNEL_LINK:
-        join_line = f"\n🔗 <a href='{CHANNEL_LINK}'><b>JOIN NEXT SESSION</b></a>"
+    join_line = f"\n🔗 <a href='{CHANNEL_LINK}'><b>JOIN NEXT SESSION</b></a>" if CHANNEL_LINK else ""
 
     return (
         f"🛑 <b>SESSION CLOSED</b> 🛑\n"
@@ -287,17 +246,21 @@ def format_fake_summary():
 # ================= AUTH =================
 
 AUTHORIZED_USERS = set()
-BOT_PASSWORD = "2222"  # <-- চাইলে env থেকে নাও: os.environ.get("BOT_PASSWORD","2222")
+BOT_PASSWORD = "2222"
 
 # ================= ENGINE =================
 
 async def game_engine(context: ContextTypes.DEFAULT_TYPE):
     print("🚀 DK MARUF Engine Started...")
-
+    
     while state.is_running:
         try:
-            latest = fetch_latest_issue(state.game_mode)
+            # Step 1: Fetch Data Asynchronously (No Freezing)
+            latest = await fetch_latest_issue(state.game_mode)
+            
             if not latest:
+                # If API fails, wait a bit and retry without crashing
+                print("API Fetch Failed - Retrying...")
                 await asyncio.sleep(3)
                 continue
 
@@ -306,40 +269,29 @@ async def game_engine(context: ContextTypes.DEFAULT_TYPE):
             latest_type = "BIG" if int(latest_num) >= 5 else "SMALL"
             next_issue = str(int(latest_issue) + 1)
 
-            # Result
+            # Step 2: Check Result
             if state.active_bet and state.active_bet['period'] == latest_issue:
                 pick = state.active_bet['pick']
                 is_win = (pick == latest_type)
-
                 state.engine.update_history(latest)
 
                 if is_win:
                     state.stats['wins'] += 1
                     state.stats['streak_win'] += 1
                     state.stats['streak_loss'] = 0
-
                     streak = state.stats['streak_win']
                     if streak in STICKERS['STREAK_WINS']:
-                        try:
-                            await context.bot.send_sticker(TARGET_CHANNEL, STICKERS['STREAK_WINS'][streak])
-                        except Exception:
-                            pass
+                        try: await context.bot.send_sticker(TARGET_CHANNEL, STICKERS['STREAK_WINS'][streak])
+                        except: pass
                     else:
-                        try:
-                            await context.bot.send_sticker(
-                                TARGET_CHANNEL,
-                                STICKERS['WIN_BIG'] if latest_type == "BIG" else STICKERS['WIN_SMALL']
-                            )
-                        except Exception:
-                            pass
+                        try: await context.bot.send_sticker(TARGET_CHANNEL, STICKERS['WIN_BIG'] if latest_type == "BIG" else STICKERS['WIN_SMALL'])
+                        except: pass
                 else:
                     state.stats['losses'] += 1
                     state.stats['streak_win'] = 0
                     state.stats['streak_loss'] += 1
-                    try:
-                        await context.bot.send_sticker(TARGET_CHANNEL, random.choice(STICKERS['LOSS']))
-                    except Exception:
-                        pass
+                    try: await context.bot.send_sticker(TARGET_CHANNEL, random.choice(STICKERS['LOSS']))
+                    except: pass
 
                 try:
                     await context.bot.send_message(
@@ -348,14 +300,15 @@ async def game_engine(context: ContextTypes.DEFAULT_TYPE):
                         parse_mode=ParseMode.HTML,
                         disable_web_page_preview=True
                     )
-                except Exception:
-                    pass
+                except: pass
 
                 state.active_bet = None
                 state.last_period_processed = latest_issue
 
-            # Signal
+            # Step 3: Send New Signal
+            # Logic: Only send if we haven't bet on next issue AND we have finished the last one
             if not state.active_bet and state.last_period_processed != next_issue:
+                # Add a small buffer to ensure result is stable
                 await asyncio.sleep(2)
 
                 state.engine.update_history(latest)
@@ -365,10 +318,8 @@ async def game_engine(context: ContextTypes.DEFAULT_TYPE):
                 state.active_bet = {"period": next_issue, "pick": pred}
 
                 s_stk = STICKERS['BIG_PRED'] if pred == "BIG" else STICKERS['SMALL_PRED']
-                try:
-                    await context.bot.send_sticker(TARGET_CHANNEL, s_stk)
-                except Exception:
-                    pass
+                try: await context.bot.send_sticker(TARGET_CHANNEL, s_stk)
+                except: pass
 
                 try:
                     await context.bot.send_message(
@@ -377,14 +328,13 @@ async def game_engine(context: ContextTypes.DEFAULT_TYPE):
                         parse_mode=ParseMode.HTML,
                         disable_web_page_preview=True
                     )
-                except Exception:
-                    pass
+                except: pass
 
             await asyncio.sleep(2)
 
         except Exception as e:
-            print(f"Loop Restarting: {e}")
-            await asyncio.sleep(2)
+            print(f"Engine Error: {e}")
+            await asyncio.sleep(5)
 
 # ================= HANDLERS =================
 
@@ -403,10 +353,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if user_id in AUTHORIZED_USERS:
         await show_main_menu(update)
     else:
-        await update.message.reply_text(
-            "🔒 <b>System Locked!</b>\nEnter Password:",
-            parse_mode=ParseMode.HTML
-        )
+        await update.message.reply_text("🔒 <b>System Locked!</b>\nEnter Password:", parse_mode=ParseMode.HTML)
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = (update.message.text or "").strip()
@@ -430,8 +377,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 parse_mode=ParseMode.HTML,
                 disable_web_page_preview=True
             )
-        except Exception:
-            pass
+        except: pass
         return
 
     if "Connect" in msg:
@@ -445,17 +391,10 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         state.stats = {"wins": 0, "losses": 0, "streak_win": 0, "streak_loss": 0}
         state.engine = PredictionEngine()
 
-        await update.message.reply_text(
-            f"✅ <b>Connected to {mode}</b>",
-            reply_markup=ReplyKeyboardRemove(),
-            parse_mode=ParseMode.HTML
-        )
-
-        try:
-            await context.bot.send_sticker(TARGET_CHANNEL, STICKERS['START'])
-        except Exception:
-            pass
-
+        await update.message.reply_text(f"✅ <b>Connected to {mode}</b>", reply_markup=ReplyKeyboardRemove(), parse_mode=ParseMode.HTML)
+        try: await context.bot.send_sticker(TARGET_CHANNEL, STICKERS['START'])
+        except: pass
+        
         context.application.create_task(game_engine(context))
 
 # ================= MAIN =================
