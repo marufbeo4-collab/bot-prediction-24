@@ -7,12 +7,14 @@ from threading import Thread
 
 import requests
 from flask import Flask
-from telegram import Update
+from telegram import Update, ReplyKeyboardMarkup, ReplyKeyboardRemove
 from telegram.constants import ParseMode
 from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandler, filters
-from telegram import ReplyKeyboardMarkup, ReplyKeyboardRemove
 
 # ================= CONFIGURATION =================
+# ⚠️ Best: Render Environment Variable এ BOT_TOKEN রাখো
+# কিন্তু চাইলে নিচের fallback টা ব্যবহার করতে পারো।
+
 BOT_TOKEN = "8595453345:AAGMYQFxohNbvz16cZTcP8HF2mqydRMZjMI"
 
 TARGET_CHANNEL = -1003293007059
@@ -21,13 +23,17 @@ CHANNEL_LINK = "https://t.me/big_maruf_official0"
 BOT_PASSWORD = "2222"   # unlock password
 
 # Password from Google Sheet A1
-SHEET_ID = "1foCsja-2HRi8HHjnMP8CyheaLOwk-ZiJ7a5uqs9khvo"
-SHEET_GID = "0"
-PASSWORD_CACHE_SECONDS = 20  # short cache, so reconnect requires fresh pull
+SHEET_ID = os.getenv("SHEET_ID", "1foCsja-2HRi8HHjnMP8CyheaLOwk-ZiJ7a5uqs9khvo")
+SHEET_GID = os.getenv("SHEET_GID", "0")
+PASSWORD_CACHE_SECONDS = int(os.getenv("PASSWORD_CACHE_SECONDS", "20"))
 
-MAX_LOSS_STOP = 8
+MAX_LOSS_STOP = int(os.getenv("MAX_LOSS_STOP", "8"))
 
-# ================= STICKERS =================
+# heartbeat (optional)
+HEARTBEAT_ENABLED = os.getenv("HEARTBEAT_ENABLED", "1") == "1"
+HEARTBEAT_EVERY_SEC = int(os.getenv("HEARTBEAT_EVERY_SEC", "1800"))  # 30 min
+
+# ================= STICKER DATABASE =================
 STICKERS = {
     'BIG_PRED': "CAACAgUAAxkBAAEQTr5pcwrBGAZ5xLp_AUAFWSiWiS0rOwAC4R0AAg7MoFcKItGd1m2CsjgE",
     'SMALL_PRED': "CAACAgUAAxkBAAEQTr9pcwrC7iH-Ei5xHz2QapE-DFkgLQACXxkAAoNWmFeTSY6h7y7VlzgE",
@@ -44,7 +50,7 @@ STICKERS = {
 API_1M = "https://draw.ar-lottery01.com/WinGo/WinGo_1M/GetHistoryIssuePage.json"
 API_30S = "https://draw.ar-lottery01.com/WinGo/WinGo_30S/GetHistoryIssuePage.json"
 
-# ================= FLASK KEEP ALIVE =================
+# ================= FLASK SERVER =================
 app = Flask('')
 
 @app.route('/')
@@ -62,10 +68,11 @@ def run_http():
 def keep_alive():
     Thread(target=run_http, daemon=True).start()
 
-# ================= PASSWORD FROM SHEET =================
+# ================= PASSWORD FROM GOOGLE SHEET =================
 _password_cache = {"value": None, "ts": 0.0}
 
 def _sheet_csv_url() -> str:
+    # Sheet must be public/anyone with link view
     return f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/export?format=csv&gid={SHEET_GID}"
 
 def _fetch_password_sync(timeout: float = 6.0) -> str | None:
@@ -93,7 +100,7 @@ async def get_password(force_refresh: bool = False) -> str | None:
         return pw
     return None
 
-# ================= ENGINE STATE =================
+# ================= PREDICTION ENGINE =================
 class PredictionEngine:
     def __init__(self):
         self.history = []
@@ -113,7 +120,7 @@ class PredictionEngine:
             self.history = self.history[:200]
             self.raw_history = self.raw_history[:200]
 
-    # ✅ Your latest logic (12 history, multi system voting)
+    # ✅ Your requested logic: 12-history + multi-system voting
     def get_pattern_signal(self, current_streak_loss):
         if len(self.history) < 12:
             pred = random.choice(["BIG", "SMALL"])
@@ -123,7 +130,7 @@ class PredictionEngine:
         h = self.history  # newest first
         votes = []
 
-        # SYSTEM 1: PATTERN
+        # SYSTEM 1: PATTERN MASTER
         if h[0] == h[1] == h[2]:  # Dragon
             votes.append(h[0]); votes.append(h[0])
         elif h[0] != h[1] and h[1] != h[2]:  # ZigZag
@@ -134,7 +141,7 @@ class PredictionEngine:
         elif h[0] == h[1] and h[1] != h[2]:  # AAB
             votes.append("SMALL" if h[0] == "BIG" else "BIG")
 
-        # SYSTEM 2: TREND (last 12)
+        # SYSTEM 2: TREND
         last_12 = h[:12]
         big_count = last_12.count("BIG")
         small_count = last_12.count("SMALL")
@@ -168,7 +175,6 @@ class PredictionEngine:
         return final_prediction
 
     def calculate_confidence(self):
-        # stable premium-looking confidence
         base = random.randint(86, 92)
         try:
             if len(self.history) >= 3 and self.history[0] == self.history[1] == self.history[2]:
@@ -177,7 +183,7 @@ class PredictionEngine:
             pass
         return base
 
-
+# ================= BOT STATE =================
 class BotState:
     def __init__(self):
         self.is_running = False
@@ -186,8 +192,17 @@ class BotState:
         self.engine = PredictionEngine()
         self.active_bet = None  # {"period":..., "pick":..., "check_mid":..., "check_task":...}
         self.last_period_processed = None
-        self.stats = {"wins": 0, "losses": 0, "streak_win": 0, "streak_loss": 0}
-        self.loss_message_ids = []  # track loss sticker + loss messages, delete on stop
+
+        self.stats = {
+            "wins": 0,
+            "losses": 0,
+            "streak_win": 0,
+            "streak_loss": 0,
+            "max_streak_win": 0,
+            "max_streak_loss": 0
+        }
+
+        self.loss_message_ids = []     # loss sticker + loss text msg ids (delete on stop)
         self.last_heartbeat_sent = 0.0
 
 state = BotState()
@@ -197,7 +212,7 @@ AUTHORIZED_USERS = set()
 def lock_all_users():
     AUTHORIZED_USERS.clear()
 
-# ================= REQUEST FETCH (multi-gateway) =================
+# ================= API FETCH (requests + gateways) =================
 def _fetch_one(url: str, headers: dict, timeout: float):
     r = requests.get(url, headers=headers, timeout=timeout)
     if r.status_code != 200:
@@ -238,7 +253,7 @@ async def fetch_latest_issue(mode: str):
             continue
     return None
 
-# ================= UTIL: DELETE SAFE =================
+# ================= SAFE DELETE HELPERS =================
 async def safe_delete(context: ContextTypes.DEFAULT_TYPE, chat_id: int, message_id: int):
     try:
         await context.bot.delete_message(chat_id=chat_id, message_id=message_id)
@@ -277,27 +292,34 @@ async def start_checking_animation(context: ContextTypes.DEFAULT_TYPE, chat_id: 
             except:
                 pass
             i += 1
-            await asyncio.sleep(1.1)
+            await asyncio.sleep(1.0)
 
     task = asyncio.create_task(_animate())
     return msg.message_id, task
 
-# ================= PREMIUM MESSAGES =================
 def now_hms():
     return time.strftime("%H:%M:%S")
 
-def step_text(loss_step: int) -> str:
-    # 1 loss -> 1 step loss, etc
-    return f"{loss_step} Step Loss" if loss_step > 0 else "Step 0"
+def step_text(step: int) -> str:
+    return f"{step} Step Loss" if step > 0 else "Step 0"
+
+def pick_badge(pred: str) -> str:
+    # Highlight pick strongly
+    if pred == "BIG":
+        return "🟢🟢 <b>BIG</b> 🟢🟢"
+    return "🔴🔴 <b>SMALL</b> 🔴🔴"
 
 def fmt_signal(next_issue: str, pred: str, conf: int):
-    e = "🟢" if pred == "BIG" else "🔴"
-    join = f"\n<a href='{CHANNEL_LINK}'>➕ Join Channel</a>" if CHANNEL_LINK else ""
+    join = f"\n🔗 <a href='{CHANNEL_LINK}'><b>REJOIN</b></a>" if CHANNEL_LINK else ""
     return (
-        f"{e} <b>{BRAND_NAME}</b>\n"
-        f"• Mode: <code>{state.game_mode}</code>  |  Period: <code>{next_issue}</code>\n"
-        f"• Pick: <b>{pred}</b>  |  Confidence: <b>{conf}%</b>\n"
-        f"• Tracker: <b>{step_text(state.stats['streak_loss'])}</b> / {MAX_LOSS_STOP}  |  <code>{now_hms()}</code>"
+        f"⚡ <b>{BRAND_NAME}</b>\n"
+        f"━━━━━━━━━━━━━━━━━━━━\n"
+        f"🧾 <b>Next Period</b>  ➜  <code>{next_issue}</code>\n"
+        f"🎯 <b>PREDICTION</b>  ➜  {pick_badge(pred)}\n"
+        f"📈 <b>Confidence</b>  ➜  <b>{conf}%</b>\n"
+        f"🧠 <b>Recovery Step</b> ➜ <b>{state.stats['streak_loss']}</b> / {MAX_LOSS_STOP}\n"
+        f"⏱ <b>Time</b> ➜ <code>{now_hms()}</code>\n"
+        f"━━━━━━━━━━━━━━━━━━━━"
         f"{join}"
     )
 
@@ -308,39 +330,59 @@ def fmt_result(issue: str, res_num: str, res_type: str, pick: str, is_win: bool)
 
     if is_win:
         title = "✅ <b>WIN CONFIRMED</b>"
-        line = f"Streak: <b>{state.stats['streak_win']}</b> • Step reset → <b>0</b>"
+        extra = f"🔥 <b>Win Streak:</b> {state.stats['streak_win']} (Max {state.stats['max_streak_win']})"
     else:
         title = "❌ <b>LOSS CONFIRMED</b>"
-        line = f"Recovery: <b>{step_text(state.stats['streak_loss'])}</b> / {MAX_LOSS_STOP}"
+        extra = f"⚠️ <b>{step_text(state.stats['streak_loss'])}</b> / {MAX_LOSS_STOP} (Max {state.stats['max_streak_loss']})"
 
     return (
         f"{title}\n"
-        f"• Period: <code>{issue}</code>\n"
-        f"• Result: {res_emoji} <b>{res_num}</b> (<b>{res_type}</b>)  |  Pick: <b>{pick}</b>\n"
-        f"• {line}\n"
-        f"• W:{state.stats['wins']}  L:{state.stats['losses']}  |  <code>{now_hms()}</code>"
+        f"━━━━━━━━━━━━━━━━━━━━\n"
+        f"🧾 <b>Period</b>: <code>{issue}</code>\n"
+        f"🎰 <b>Result</b>: {res_emoji} <b>{res_num}</b> (<b>{res_type}</b>)\n"
+        f"🎯 <b>Your Pick</b>: <b>{pick}</b>\n"
+        f"━━━━━━━━━━━━━━━━━━━━\n"
+        f"{extra}\n"
+        f"📊 <b>W</b>:{state.stats['wins']}  |  <b>L</b>:{state.stats['losses']}  |  <code>{now_hms()}</code>"
     )
 
 def fmt_summary():
     w = state.stats["wins"]
     l = state.stats["losses"]
     total = w + l
-    acc = int((w / total) * 100) if total else 0
-    join = f"\n<a href='{CHANNEL_LINK}'>🔗 Join Again</a>" if CHANNEL_LINK else ""
+    win_rate = round((w / total) * 100, 2) if total else 0.0
+
+    join = f"\n🔗 <a href='{CHANNEL_LINK}'><b>REJOIN</b></a>" if CHANNEL_LINK else ""
+
     return (
-        f"🛑 <b>SESSION STOPPED</b> • <b>{BRAND_NAME}</b>\n"
-        f"• W:{w}  L:{l}  |  Accuracy: <b>{acc}%</b>\n"
-        f"• Last Step: <b>{step_text(state.stats['streak_loss'])}</b>  |  <code>{now_hms()}</code>"
+        f"🛑 <b>SESSION SUMMARY</b>\n"
+        f"━━━━━━━━━━━━━━━━━━━━\n"
+        f"👑 <b>{BRAND_NAME}</b>\n"
+        f"━━━━━━━━━━━━━━━━━━━━\n"
+        f"🎮 <b>Mode</b>: <code>{state.game_mode}</code>\n"
+        f"📦 <b>Total Rounds</b>: <b>{total}</b>\n"
+        f"✅ <b>Win</b>: <b>{w}</b>\n"
+        f"❌ <b>Loss</b>: <b>{l}</b>\n"
+        f"🎯 <b>Win Rate</b>: <b>{win_rate}%</b>\n"
+        f"━━━━━━━━━━━━━━━━━━━━\n"
+        f"🔥 <b>Max Win Streak</b>: <b>{state.stats['max_streak_win']}</b>\n"
+        f"🧊 <b>Max Loss Streak</b>: <b>{state.stats['max_streak_loss']}</b>\n"
+        f"━━━━━━━━━━━━━━━━━━━━\n"
+        f"⏱ <b>Closed At</b>: <code>{now_hms()}</code>"
         f"{join}"
     )
 
 def fmt_consolation_stop():
-    join = f"\n<a href='{CHANNEL_LINK}'>🫶 Take a break & return</a>" if CHANNEL_LINK else ""
+    join = f"\n🔗 <a href='{CHANNEL_LINK}'><b>TAKE A BREAK</b></a>" if CHANNEL_LINK else ""
     return (
-        f"🧊 <b>SAFE GUARD</b> • <b>{BRAND_NAME}</b>\n"
-        f"• <b>{MAX_LOSS_STOP} Step Loss</b> reached.\n"
-        f"• Prediction is now <b>OFF</b> to protect your session.\n"
-        f"• Use /start again when ready."
+        f"🧊 <b>SAFE GUARD ACTIVATED</b>\n"
+        f"━━━━━━━━━━━━━━━━━━━━\n"
+        f"👑 <b>{BRAND_NAME}</b>\n"
+        f"━━━━━━━━━━━━━━━━━━━━\n"
+        f"⚠️ <b>{MAX_LOSS_STOP} Step Loss</b> reached.\n"
+        f"🛡️ Prediction is now <b>OFF</b> for safety.\n"
+        f"✅ Use /start to unlock again.\n"
+        f"━━━━━━━━━━━━━━━━━━━━"
         f"{join}"
     )
 
@@ -365,20 +407,21 @@ async def game_engine(context: ContextTypes.DEFAULT_TYPE, sid: int):
             latest_type = "BIG" if int(latest_num) >= 5 else "SMALL"
             next_issue = str(int(latest_issue) + 1)
 
-            # ========== RESULT ==========
+            # ---------- RESULT ----------
             if state.active_bet and state.active_bet.get("period") == latest_issue:
                 if state.last_period_processed == latest_issue:
                     await asyncio.sleep(1)
                     continue
 
-                # stop animation + delete checking msg
-                try:
-                    if state.active_bet.get("check_task"):
-                        state.active_bet["check_task"].cancel()
-                except:
-                    pass
-                if state.active_bet.get("check_mid"):
-                    await safe_delete(context, TARGET_CHANNEL, state.active_bet["check_mid"])
+                # stop checking animation + delete checking message
+                if state.active_bet:
+                    try:
+                        if state.active_bet.get("check_task"):
+                            state.active_bet["check_task"].cancel()
+                    except:
+                        pass
+                    if state.active_bet.get("check_mid"):
+                        await safe_delete(context, TARGET_CHANNEL, state.active_bet["check_mid"])
 
                 pick = state.active_bet["pick"]
                 is_win = (pick == latest_type)
@@ -386,12 +429,14 @@ async def game_engine(context: ContextTypes.DEFAULT_TYPE, sid: int):
                 # update history
                 state.engine.update_history(latest)
 
-                # update stats + stickers
+                # update stats
                 if is_win:
                     state.stats["wins"] += 1
                     state.stats["streak_win"] += 1
-                    state.stats["streak_loss"] = 0  # ✅ reset on win
+                    state.stats["streak_loss"] = 0
+                    state.stats["max_streak_win"] = max(state.stats["max_streak_win"], state.stats["streak_win"])
 
+                    # win sticker
                     try:
                         st = STICKERS["WIN_BIG"] if latest_type == "BIG" else STICKERS["WIN_SMALL"]
                         await context.bot.send_sticker(TARGET_CHANNEL, st)
@@ -400,16 +445,17 @@ async def game_engine(context: ContextTypes.DEFAULT_TYPE, sid: int):
                 else:
                     state.stats["losses"] += 1
                     state.stats["streak_win"] = 0
-                    state.stats["streak_loss"] += 1  # ✅ step counts
+                    state.stats["streak_loss"] += 1
+                    state.stats["max_streak_loss"] = max(state.stats["max_streak_loss"], state.stats["streak_loss"])
 
-                    # track loss sticker msg id for deletion later
+                    # loss sticker (track for deletion)
                     try:
                         ms = await context.bot.send_sticker(TARGET_CHANNEL, random.choice(STICKERS["LOSS"]))
                         state.loss_message_ids.append(ms.message_id)
                     except:
                         pass
 
-                # send result text
+                # result message (track only if loss)
                 try:
                     mr = await context.bot.send_message(
                         TARGET_CHANNEL,
@@ -425,12 +471,13 @@ async def game_engine(context: ContextTypes.DEFAULT_TYPE, sid: int):
                 state.active_bet = None
                 state.last_period_processed = latest_issue
 
-                # AUTO SAFE STOP at 8 losses
+                # auto stop at MAX_LOSS_STOP
                 if state.stats["streak_loss"] >= MAX_LOSS_STOP:
                     state.is_running = False
                     lock_all_users()
-                    # delete all loss messages automatically when stopping
+                    # delete loss clutter first
                     await delete_all_loss_messages(context)
+                    # send consolation
                     try:
                         await context.bot.send_message(
                             TARGET_CHANNEL,
@@ -442,7 +489,7 @@ async def game_engine(context: ContextTypes.DEFAULT_TYPE, sid: int):
                         pass
                     return
 
-            # ========== SIGNAL ==========
+            # ---------- SIGNAL ----------
             if (not state.active_bet) and (state.last_period_processed != next_issue):
                 await asyncio.sleep(1 if state.game_mode == "30S" else 2)
                 if state.session_id != sid:
@@ -452,10 +499,9 @@ async def game_engine(context: ContextTypes.DEFAULT_TYPE, sid: int):
                 pred = state.engine.get_pattern_signal(state.stats["streak_loss"])
                 conf = state.engine.calculate_confidence()
 
-                # set active bet
                 state.active_bet = {"period": next_issue, "pick": pred}
 
-                # sticker
+                # prediction sticker
                 try:
                     s_stk = STICKERS["BIG_PRED"] if pred == "BIG" else STICKERS["SMALL_PRED"]
                     await context.bot.send_sticker(TARGET_CHANNEL, s_stk)
@@ -473,7 +519,7 @@ async def game_engine(context: ContextTypes.DEFAULT_TYPE, sid: int):
                 except:
                     pass
 
-                # checking animation message (auto delete later)
+                # checking animation message (delete later)
                 try:
                     check_mid, check_task = await start_checking_animation(
                         context,
@@ -483,7 +529,6 @@ async def game_engine(context: ContextTypes.DEFAULT_TYPE, sid: int):
                     state.active_bet["check_mid"] = check_mid
                     state.active_bet["check_task"] = check_task
                 except:
-                    # if checking can't be created, ignore
                     pass
 
             await asyncio.sleep(1 if state.game_mode == "30S" else 2)
@@ -492,7 +537,6 @@ async def game_engine(context: ContextTypes.DEFAULT_TYPE, sid: int):
             await asyncio.sleep(2)
 
 async def run_engine_forever(context: ContextTypes.DEFAULT_TYPE, sid: int):
-    # prevent sudden stop: restart loop if it exits unexpectedly
     while state.is_running and state.session_id == sid:
         try:
             await game_engine(context, sid)
@@ -501,17 +545,19 @@ async def run_engine_forever(context: ContextTypes.DEFAULT_TYPE, sid: int):
         await asyncio.sleep(1)
 
 async def heartbeat(context: ContextTypes.DEFAULT_TYPE, sid: int):
-    # not choppy; every 15 min
     while state.is_running and state.session_id == sid:
         try:
             now = time.time()
-            if now - state.last_heartbeat_sent >= 900:
+            if now - state.last_heartbeat_sent >= HEARTBEAT_EVERY_SEC:
                 state.last_heartbeat_sent = now
                 await context.bot.send_message(
                     TARGET_CHANNEL,
-                    f"🟢 <b>{BRAND_NAME}</b> • <b>{state.game_mode}</b> • "
-                    f"<b>{step_text(state.stats['streak_loss'])}</b>/{MAX_LOSS_STOP} • "
-                    f"W:{state.stats['wins']} L:{state.stats['losses']} • <code>{now_hms()}</code>",
+                    f"🟢 <b>{BRAND_NAME}</b>\n"
+                    f"━━━━━━━━━━━━━━━━━━━━\n"
+                    f"✅ <b>Alive</b> • Mode <b>{state.game_mode}</b>\n"
+                    f"🧠 Recovery Step: <b>{state.stats['streak_loss']}</b>/{MAX_LOSS_STOP}\n"
+                    f"📊 W:{state.stats['wins']}  L:{state.stats['losses']}\n"
+                    f"⏱ <code>{now_hms()}</code>",
                     parse_mode=ParseMode.HTML,
                     disable_web_page_preview=True
                 )
@@ -522,7 +568,7 @@ async def heartbeat(context: ContextTypes.DEFAULT_TYPE, sid: int):
 # ================= HANDLERS =================
 async def show_main_menu(update: Update):
     await update.message.reply_text(
-        f"🔓 <b>ACCESS GRANTED</b>\n<b>{BRAND_NAME}</b>\n\nChoose Mode:",
+        f"🔓 <b>ACCESS GRANTED</b>\n<b>{BRAND_NAME}</b>\n\nSelect Mode:",
         reply_markup=ReplyKeyboardMarkup(
             [['⚡ Connect 1M', '⚡ Connect 30S'], ['🛑 Stop & Summary']],
             resize_keyboard=True
@@ -531,7 +577,6 @@ async def show_main_menu(update: Update):
     )
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    # always fetch password once on /start
     pw = await get_password(force_refresh=True)
     if not pw:
         await update.message.reply_text("⚠️ Password system offline (Sheet not reachable).", parse_mode=ParseMode.HTML)
@@ -554,7 +599,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # AUTH
     if uid not in AUTHORIZED_USERS:
-        # always require password after stop (we clear AUTHORIZED_USERS on stop)
         if msg == pw:
             AUTHORIZED_USERS.add(uid)
             await show_main_menu(update)
@@ -567,7 +611,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         state.session_id += 1
         state.is_running = False
 
-        # cancel checking task + delete checking msg if exists
+        # cancel checking + delete checking msg if exists
         if state.active_bet:
             try:
                 if state.active_bet.get("check_task"):
@@ -580,10 +624,10 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         await update.message.reply_text("🛑 Stopping…", parse_mode=ParseMode.HTML)
 
-        # delete loss stickers/messages automatically
+        # ✅ loss messages delete first
         await delete_all_loss_messages(context)
 
-        # send summary
+        # ✅ then summary (clean group)
         try:
             await context.bot.send_message(
                 TARGET_CHANNEL,
@@ -594,31 +638,36 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except:
             pass
 
-        # require password again next time
         lock_all_users()
         return
 
     # CONNECT
     if "Connect" in msg:
-        # force refresh password on connect to ensure sheet changes apply
         pw2 = await get_password(force_refresh=True)
         if not pw2:
             await update.message.reply_text("⚠️ Password system offline (Sheet not reachable).", parse_mode=ParseMode.HTML)
             return
 
-        # new session
         state.session_id += 1
         sid = state.session_id
 
         mode = "1M" if "1M" in msg else "30S"
         state.game_mode = mode
         state.is_running = True
-        state.stats = {"wins": 0, "losses": 0, "streak_win": 0, "streak_loss": 0}
         state.engine = PredictionEngine()
         state.active_bet = None
         state.last_period_processed = None
         state.loss_message_ids = []
         state.last_heartbeat_sent = 0.0
+
+        state.stats = {
+            "wins": 0,
+            "losses": 0,
+            "streak_win": 0,
+            "streak_loss": 0,
+            "max_streak_win": 0,
+            "max_streak_loss": 0
+        }
 
         await update.message.reply_text(
             f"✅ Connected: <b>{mode}</b>\nEngine: <b>LIVE</b>",
@@ -632,7 +681,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             pass
 
         context.application.create_task(run_engine_forever(context, sid))
-        context.application.create_task(heartbeat(context, sid))
+        if HEARTBEAT_ENABLED:
+            context.application.create_task(heartbeat(context, sid))
 
 # ================= MAIN =================
 if __name__ == "__main__":
@@ -640,7 +690,7 @@ if __name__ == "__main__":
     keep_alive()
 
     if not BOT_TOKEN or "PASTE_TOKEN_HERE" in BOT_TOKEN:
-        raise RuntimeError("BOT_TOKEN missing! Replace PASTE_TOKEN_HERE in main.py")
+        raise RuntimeError("BOT_TOKEN missing! Set env BOT_TOKEN or replace PASTE_TOKEN_HERE in main.py")
 
     app_telegram = Application.builder().token(BOT_TOKEN).build()
     app_telegram.add_handler(CommandHandler("start", start))
