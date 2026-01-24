@@ -11,9 +11,8 @@ from telegram import Update, ReplyKeyboardMarkup, ReplyKeyboardRemove
 from telegram.constants import ParseMode
 from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandler, filters
 
-
 # ================= CONFIGURATION =================
-# ⚠️ Public GitHub repo হলে token leak হবে. Private repo রাখো.
+# ⚠️ Public GitHub এ commit করলে token leak হবে. Private repo best.
 BOT_TOKEN = "8595453345:AAGMYQFxohNbvz16cZTcP8HF2mqydRMZjMI"
 
 TARGET_CHANNEL = -1003293007059
@@ -49,7 +48,7 @@ STICKERS = {
 API_1M = "https://draw.ar-lottery01.com/WinGo/WinGo_1M/GetHistoryIssuePage.json"
 API_30S = "https://draw.ar-lottery01.com/WinGo/WinGo_30S/GetHistoryIssuePage.json"
 
-# ================= FLASK SERVER (KEEP ALIVE ENDPOINT) =================
+# ================= FLASK SERVER (KEEP ALIVE) =================
 app = Flask('')
 
 @app.route('/')
@@ -62,55 +61,94 @@ def health():
 
 def run_http():
     port = int(os.environ.get("PORT", 8080))
-    # Render এ reloader বন্ধ রাখতে হবে (double process avoid)
     app.run(host='0.0.0.0', port=port, use_reloader=False)
 
 def keep_alive():
-    t = Thread(target=run_http, daemon=True)
-    t.start()
+    Thread(target=run_http, daemon=True).start()
 
 # ================= PREDICTION ENGINE =================
 class PredictionEngine:
     def __init__(self):
-        self.history = []
-        self.raw_history = []
+        self.history = []       # ["BIG","SMALL"...]
+        self.raw_history = []   # raw issues list
+        self.last_prediction = None  # ✅ NEW (for anti-trap)
 
     def update_history(self, issue_data):
+        """
+        issue_data: {"issueNumber":..., "number":...}
+        newest first রাখে, duplicate avoid করে।
+        """
         try:
             number = int(issue_data['number'])
             result_type = "BIG" if number >= 5 else "SMALL"
         except Exception:
             return
 
-        if (not self.raw_history) or (self.raw_history[0].get('issueNumber') != issue_data.get('issueNumber')):
+        # duplicate avoid (same issueNumber)
+        if (not self.raw_history) or (str(self.raw_history[0].get('issueNumber')) != str(issue_data.get('issueNumber'))):
             self.history.insert(0, result_type)
             self.raw_history.insert(0, issue_data)
-            self.history = self.history[:50]
-            self.raw_history = self.raw_history[:50]
 
+            self.history = self.history[:60]
+            self.raw_history = self.raw_history[:60]
+
+    # ✅ তোমার দেওয়া prediction logic
     def get_pattern_signal(self, current_streak_loss: int):
-        if len(self.history) < 10:
-            return random.choice(["BIG", "SMALL"])
+        # ইতিহাস খুব ছোট হলে র‍্যান্ডম দিবে
+        if len(self.history) < 5:
+            prediction = random.choice(["BIG", "SMALL"])
+            self.last_prediction = prediction
+            return prediction
 
-        last_6 = self.history[:6]
+        last_6 = self.history[:6]  # গত ৬টি রেজাল্ট
         prediction = None
 
-        if len(last_6) >= 3 and last_6[0] == last_6[1] == last_6[2]:
+        # =========================================
+        # 🛡️ লজিক ১: ANTI-TRAP (লস রিকভারি সিস্টেম)
+        # =========================================
+        if current_streak_loss >= 2:
+            if self.last_prediction == "BIG":
+                prediction = "SMALL"
+            elif self.last_prediction == "SMALL":
+                prediction = "BIG"
+            else:
+                prediction = "SMALL" if last_6[0] == "BIG" else "BIG"
+
+            self.last_prediction = prediction
+            return prediction
+
+        # =========================================
+        # 🐉 লজিক ২: DRAGON / STREAK (টানা একই আসলে)
+        # =========================================
+        if len(last_6) >= 3 and (last_6[0] == last_6[1] == last_6[2]):
             prediction = last_6[0]
-        elif len(last_6) >= 3 and (last_6[0] != last_6[1] and last_6[1] != last_6[2]):
+
+        # =========================================
+        # ⚡ লজিক ৩: ZIG-ZAG
+        # =========================================
+        elif len(last_6) >= 3 and (last_6[0] != last_6[1]) and (last_6[1] != last_6[2]):
             prediction = "SMALL" if last_6[0] == "BIG" else "BIG"
+
+        # =========================================
+        # 🎲 লজিক ৪: TWO-TWO
+        # =========================================
+        elif len(last_6) >= 3 and (last_6[0] == last_6[1]) and (last_6[2] != last_6[0]):
+            prediction = last_6[0]
+
+        # =========================================
+        # 🧮 লজিক ৫: MATH FALLBACK
+        # =========================================
         else:
             try:
                 last_num = int(self.raw_history[0]['number'])
-                period = int(str(self.raw_history[0]['issueNumber'])[-1])
-                calc = (last_num * 3 + period * 7) % 10
-                prediction = "BIG" if calc >= 5 else "SMALL"
+                period_last_digit = int(str(self.raw_history[0]['issueNumber'])[-1])
+                total = last_num + period_last_digit
+
+                prediction = "SMALL" if (total % 2 == 0) else "BIG"
             except:
                 prediction = random.choice(["BIG", "SMALL"])
 
-        if int(current_streak_loss) >= 2:
-            return "SMALL" if prediction == "BIG" else "BIG"
-
+        self.last_prediction = prediction
         return prediction
 
     def calculate_confidence(self):
@@ -133,6 +171,47 @@ class BotState:
         self.stats = {"wins": 0, "losses": 0, "streak_win": 0, "streak_loss": 0}
 
 state = BotState()
+
+# ================= REQUESTS + MULTI-GATEWAY (ANTI BLOCK) =================
+def _fetch_one(url: str, headers: dict, timeout: float):
+    r = requests.get(url, headers=headers, timeout=timeout)
+    if r.status_code != 200:
+        return None
+    data = r.json()
+    if data and "data" in data and "list" in data["data"] and data["data"]["list"]:
+        return data["data"]["list"][0]
+    return None
+
+async def fetch_latest_issue(mode: str):
+    base_url = API_1M if mode == '1M' else API_30S
+    timestamp = int(time.time() * 1000)
+
+    gateways = [
+        f"{base_url}?t={timestamp}",
+        f"https://corsproxy.io/?{base_url}?t={timestamp}",
+        f"https://api.allorigins.win/raw?url={base_url}?t={timestamp}",
+        f"https://thingproxy.freeboard.io/fetch/{base_url}?t={timestamp}",
+        f"https://api.codetabs.com/v1/proxy?quest={base_url}?t={timestamp}",
+    ]
+
+    headers = {
+        "User-Agent": f"Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/{random.randint(110, 123)}.0.0.0 Safari/537.36",
+        "Referer": "https://dkwin9.com/",
+        "Accept": "application/json",
+        "Cache-Control": "no-cache",
+        "Pragma": "no-cache"
+    }
+
+    timeout = 5 if mode == "30S" else 8
+
+    for url in gateways:
+        try:
+            res = await asyncio.to_thread(_fetch_one, url, headers, timeout)
+            if res:
+                return res
+        except:
+            continue
+    return None
 
 # ================= FORMATTING =================
 def format_signal(issue, prediction, conf, streak_loss):
@@ -159,7 +238,8 @@ def format_signal(issue, prediction, conf, streak_loss):
 
 def format_result(issue, res_num, res_type, my_pick, is_win):
     res_emoji = "🟢" if res_type == "BIG" else "🔴"
-    if int(res_num) in [0, 5]: res_emoji = "🟣"
+    if int(res_num) in [0, 5]:
+        res_emoji = "🟣"
 
     if is_win:
         header = "✅ <b>ＷＩＮ ＷＩＮ ＷＩＮ</b> ✅"
@@ -206,50 +286,6 @@ def format_fake_summary():
 # ================= AUTH =================
 AUTHORIZED_USERS = set()
 
-# ================= API FETCH (requests + to_thread + multi-gateway) =================
-def _fetch_one(url: str, headers: dict, timeout: float):
-    r = requests.get(url, headers=headers, timeout=timeout)
-    if r.status_code != 200:
-        return None
-    data = r.json()
-    if data and "data" in data and "list" in data["data"] and data["data"]["list"]:
-        return data["data"]["list"][0]
-    return None
-
-async def fetch_latest_issue(mode: str):
-    base_url = API_1M if mode == '1M' else API_30S
-    timestamp = int(time.time() * 1000)
-
-    # 5 gateways rotation
-    gateways = [
-        f"{base_url}?t={timestamp}",
-        f"https://corsproxy.io/?{base_url}?t={timestamp}",
-        f"https://api.allorigins.win/raw?url={base_url}?t={timestamp}",
-        f"https://thingproxy.freeboard.io/fetch/{base_url}?t={timestamp}",
-        f"https://api.codetabs.com/v1/proxy?quest={base_url}?t={timestamp}",
-    ]
-
-    headers = {
-        "User-Agent": f"Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/{random.randint(110, 123)}.0.0.0 Safari/537.36",
-        "Referer": "https://dkwin9.com/",
-        "Accept": "application/json",
-        "Cache-Control": "no-cache",
-        "Pragma": "no-cache"
-    }
-
-    # Timeout: 30S mode এ ছোট, 1M এ একটু বেশি
-    timeout = 5 if mode == "30S" else 8
-
-    for url in gateways:
-        try:
-            res = await asyncio.to_thread(_fetch_one, url, headers, timeout)
-            if res:
-                return res
-        except:
-            continue
-
-    return None
-
 # ================= ENGINE =================
 async def game_engine(context: ContextTypes.DEFAULT_TYPE, my_session_id: int):
     print(f"🚀 {BRAND_NAME} Engine Started (Session: {my_session_id})...")
@@ -261,11 +297,10 @@ async def game_engine(context: ContextTypes.DEFAULT_TYPE, my_session_id: int):
             latest = await fetch_latest_issue(state.game_mode)
 
             if not latest:
-                # ✅ NO OFFLINE SIGNAL. Only retry forever.
+                # ✅ NO OFFLINE/AUTO SIGNAL — শুধু retry
                 fail_count += 1
-                wait_time = 1 if state.game_mode == '30S' else 2
-                wait_time = min(wait_time + fail_count, 10)
-                await asyncio.sleep(wait_time)
+                base_wait = 1 if state.game_mode == '30S' else 2
+                await asyncio.sleep(min(base_wait + fail_count, 10))
                 continue
 
             fail_count = 0
@@ -283,6 +318,7 @@ async def game_engine(context: ContextTypes.DEFAULT_TYPE, my_session_id: int):
 
                 pick = state.active_bet['pick']
                 is_win = (pick == latest_type)
+
                 state.engine.update_history(latest)
 
                 if is_win:
@@ -323,7 +359,7 @@ async def game_engine(context: ContextTypes.DEFAULT_TYPE, my_session_id: int):
                 state.last_period_processed = latest_issue
 
             # -------- SIGNAL --------
-            if (not state.active_bet) and (state.last_period_processed != next_issue):
+            if not state.active_bet and state.last_period_processed != next_issue:
                 buffer_time = 1 if state.game_mode == '30S' else 2
                 await asyncio.sleep(buffer_time)
 
@@ -331,6 +367,7 @@ async def game_engine(context: ContextTypes.DEFAULT_TYPE, my_session_id: int):
                     return
 
                 state.engine.update_history(latest)
+
                 pred = state.engine.get_pattern_signal(state.stats['streak_loss'])
                 conf = state.engine.calculate_confidence()
 
@@ -412,6 +449,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             reply_markup=ReplyKeyboardRemove(),
             parse_mode=ParseMode.HTML
         )
+
         try: await context.bot.send_sticker(TARGET_CHANNEL, STICKERS['START'])
         except: pass
 
@@ -423,7 +461,7 @@ if __name__ == '__main__':
     keep_alive()
 
     if not BOT_TOKEN or "PASTE_TOKEN_HERE" in BOT_TOKEN:
-        raise RuntimeError("Set BOT_TOKEN in main.py (PASTE_TOKEN_HERE replace) or use Render env var.")
+        raise RuntimeError("❌ BOT_TOKEN সেট করা হয়নি! main.py এ PASTE_TOKEN_HERE replace করো.")
 
     app_telegram = Application.builder().token(BOT_TOKEN).build()
     app_telegram.add_handler(CommandHandler("start", start))
