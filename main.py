@@ -15,7 +15,7 @@ from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandl
 # ✅ HARD-CODE CONFIG (সব কোডের ভিতরেই)
 # =========================================================
 BOT_TOKEN = "8595453345:AAGMYQFxohNbvz16cZTcP8HF2mqydRMZjMI"   # <-- এখানে তোমার টোকেন বসাও (Render env লাগবে না)
-TARGET_CHANNEL = -1003651634734          # <-- তোমার channel id
+TARGET_CHANNEL = -1003293007059          # <-- তোমার channel id
 
 BRAND_NAME = "𝐃𝐊 𝐌𝐀𝐑𝐔𝐅 𝐎𝐅𝐅𝐈𝐂𝐈𝐀𝐋 𝟐𝟒/𝟕 𝐒𝐈𝐆𝐍𝐀𝐋"
 CHANNEL_LINK = "https://t.me/big_maruf_official0"
