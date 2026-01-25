@@ -48,6 +48,19 @@ WIN_SMALL = "CAACAgUAAxkBAAEQTjlpcmXkF8R0bNj0jb1Xd8NF-kaTSQAC7DQAAhnRsVTS3-Z8tj-
 WIN_ANY = "CAACAgUAAxkBAAEQTydpcz9Kv1L2PJyNlbkcZpcztKKxfQACDRsAAoq1mFcAAYLsJ33TdUA4BA"
 LOSS_ANY = "CAACAgUAAxkBAAEQTytpcz9VQoHyZ5ClbKSqKCJbpqX6yQACahYAAl1wAAFUL9xOdyh8UL84BA"
 
+# ✅ SUPER WIN STREAK (2 - 10)
+SUPER_WIN_STREAK = {
+    2: "CAACAgUAAxkBAAEQTiBpcmUfm9aQmlIHtPKiG2nE2e6EeAACcRMAAiLWqFSpdxWmKJ1TXzgE",
+    3: "CAACAgUAAxkBAAEQTiFpcmUgdgJQ_czeoFyRhNZiZI2lwwAC8BcAAv8UqFSVBQEdUW48HTgE",
+    4: "CAACAgUAAxkBAAEQTiJpcmUgSydN-tKxoSVdFuAvCcJ3fQACvSEAApMRqFQoUYBnH5Pc7TgE",
+    5: "CAACAgUAAxkBAAEQTiNpcmUgu_dP3wKT2k94EJCiw3u52QACihoAArkfqFSlrldtXbLGGDgE",
+    6: "CAACAgUAAxkBAAEQTiRpcmUhQJUjd2ukdtfEtBjwtMH4MAACWRgAAsTFqVTato0SmSN-6jgE",
+    7: "CAACAgUAAxkBAAEQTiVpcmUhha9HAAF19fboYayfUrm3tdYAAioXAAIHgKhUD0QmGyF5Aug4BA",
+    8: "CAACAgUAAxkBAAEQTixpcmUmevnNEqUbr0qbbVgW4psMNQACMxUAAow-qFSnSz4Ik1ddNzgE",
+    9: "CAACAgUAAxkBAAEQTi1pcmUmpSxAHo2pvR-GjCPTmkLr0AACLh0AAhCRqFRH5-2YyZKq1jgE",
+    10:"CAACAgUAAxkBAAEQTi5pcmUmjmjp7oXg4InxI1dGYruxDwACqBgAAh19qVT6X_-oEywCkzgE",
+}
+
 WIN_RANDOM_POOL = [
     "CAACAgUAAxkBAAEQTzNpcz9ns8rx_5xmxk4HHQOJY2uUQQAC3RoAAuCpcFbMKj0VkxPOdTgE",
     "CAACAgUAAxkBAAEQTzRpcz9ni_I4CjwFZ3iSt4xiXxFgkwACkxgAAnQKcVYHd8IiRqfBXTgE",
@@ -71,7 +84,7 @@ SEASON_START = {
     "1M":  "CAACAgUAAxkBAAEQUrRpdYvESSIrn4-Lm936I6F8_BaN-wACChYAAuBHOVc6YQfcV-EKqjgE"
 }
 
-# ✅ must go start+end always, but NOT during loss
+# ✅ start/end hype (NOT during loss)
 HYPE_STICKER = "CAACAgUAAxkBAAEQTjRpcmWdzXBzA7e9KNz8QgTI6NXlxgACuRcAAh2x-FaJNjq4QG_DujgE"
 
 
@@ -175,8 +188,7 @@ class TgSender:
                 await coro
             except:
                 pass
-            # ✅ very low delay (fast serial, less lag)
-            await asyncio.sleep(0.15)
+            await asyncio.sleep(0.15)  # ✅ fast serial
 
     async def enqueue(self, coro):
         await self.q.put(coro)
@@ -301,29 +313,31 @@ class PredictionEngine:
             self.history = self.history[:800]
             self.raw_history = self.raw_history[:800]
 
-    # ✅ your final logic
+    # ✅ your new logic inserted exactly
     def get_pattern_signal(self, current_streak_loss):
-        if len(self.history) < 12:
+        # ইতিহাস না থাকলে র‍্যান্ডম
+        if not self.history:
             pred = random.choice(["BIG", "SMALL"])
             self.last_prediction = pred
             return pred
 
-        last_12 = self.history[:12]
-        big_count = last_12.count("BIG")
-        small_count = last_12.count("SMALL")
+        last_result = self.history[0]  # লাস্ট রেজাল্ট (যেমন: BIG)
 
-        if big_count > small_count:
-            prediction = "BIG"
-        elif small_count > big_count:
-            prediction = "SMALL"
+        # 🐉 PHASE 1: DRAGON HUNTER (লস ০ বা ১ হলে)
+        if current_streak_loss < 2:
+            self.last_prediction = last_result
+            return last_result
+
+        # ⚡ PHASE 2: ZIG-ZAG TRAP (লস ২ থেকে ৪ হলে)
+        elif current_streak_loss < 5:
+            pred = "SMALL" if last_result == "BIG" else "BIG"
+            self.last_prediction = pred
+            return pred
+
+        # 🛡️ PHASE 3: SAFETY NET (লস ৫ বা বেশি হলে)
         else:
-            prediction = self.history[0]
-
-        if current_streak_loss >= 3:
-            prediction = "SMALL" if prediction == "BIG" else "BIG"
-
-        self.last_prediction = prediction
-        return prediction
+            self.last_prediction = last_result
+            return last_result
 
     def calculate_confidence(self):
         base = random.randint(90, 94)
@@ -343,7 +357,6 @@ class BotState:
 
         self.engine = PredictionEngine()
 
-        # active_bet -> strict serial
         self.active_bet = None  # {"period": str, "pick": str, "check_mid": int|None}
 
         self.last_seen_issue = None
@@ -413,7 +426,7 @@ async def engine_loop(context: ContextTypes.DEFAULT_TYPE):
                 pick = state.active_bet["pick"]
                 check_mid = state.active_bet.get("check_mid")
 
-                # delete checking FIRST (fast clean)
+                # delete checking FIRST
                 if check_mid:
                     await sender.enqueue(context.bot.delete_message(TARGET_CHANNEL, check_mid))
 
@@ -430,10 +443,14 @@ async def engine_loop(context: ContextTypes.DEFAULT_TYPE):
                     # end hype (not during loss)
                     await sender.enqueue(context.bot.send_sticker(TARGET_CHANNEL, HYPE_STICKER))
 
-                    pool = [WIN_ANY, (WIN_BIG if latest_type == "BIG" else WIN_SMALL)]
-                    if state.stats["streak_win"] >= 2:
-                        pool.append(random.choice(WIN_RANDOM_POOL))
-                    await sender.enqueue(context.bot.send_sticker(TARGET_CHANNEL, random.choice(pool)))
+                    # ✅ Super win sticker on streak 2-10
+                    if state.stats["streak_win"] in SUPER_WIN_STREAK:
+                        await sender.enqueue(context.bot.send_sticker(TARGET_CHANNEL, SUPER_WIN_STREAK[state.stats["streak_win"]]))
+                    else:
+                        pool = [WIN_ANY, (WIN_BIG if latest_type == "BIG" else WIN_SMALL)]
+                        if state.stats["streak_win"] >= 2:
+                            pool.append(random.choice(WIN_RANDOM_POOL))
+                        await sender.enqueue(context.bot.send_sticker(TARGET_CHANNEL, random.choice(pool)))
 
                 else:
                     state.stats["losses"] += 1
@@ -509,11 +526,10 @@ async def engine_loop(context: ContextTypes.DEFAULT_TYPE):
                 pred = state.engine.get_pattern_signal(state.stats["streak_loss"])
                 conf = state.engine.calculate_confidence()
 
-                # create bet first to lock serial
+                # lock serial
                 state.active_bet = {"period": next_issue, "pick": pred, "check_mid": None}
 
                 # (1) sticker first
-                # start hype only if not in loss
                 if state.stats["streak_loss"] == 0:
                     await sender.enqueue(context.bot.send_sticker(TARGET_CHANNEL, HYPE_STICKER))
                 await sender.enqueue(context.bot.send_sticker(TARGET_CHANNEL, PRED_STICKERS[state.game_mode][pred]))
@@ -698,7 +714,6 @@ if __name__ == "__main__":
     if not BOT_TOKEN or "PASTE_TOKEN_HERE" in BOT_TOKEN:
         raise RuntimeError("BOT_TOKEN missing! Replace PASTE_TOKEN_HERE in main.py")
 
-    # start sender queue
     async def _bootstrap(app: Application):
         app.create_task(sender.start())
 
