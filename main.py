@@ -25,7 +25,7 @@ from telegram.ext import (
 # =========================
 # CONFIG (ONLY TOKEN YOU SET)
 # =========================
-BOT_TOKEN = "8595453345:AAGMYQFxohNbvz16cZTcP8HF2mqydRMZjMI"  # <-- ONLY THIS YOU CHANGE
+BOT_TOKEN = "8595453345:AAGojMk2ReHFGV9ihJq57JjzMsuW94Ussec"  # <-- ONLY THIS YOU CHANGE
 
 BRAND_NAME = "⚡ DK MARUF OFFICIAL 24/7 SIGNAL"
 CHANNEL_LINK = "https://t.me/big_maruf_official0"
