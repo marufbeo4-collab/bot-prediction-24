@@ -113,15 +113,16 @@ async def get_password(force_refresh: bool = False) -> str | None:
         return pw
     return None
 
-# ================= FETCH (FAST multi-gateway) =================
-def _fetch_one(url: str, headers: dict, timeout: float):
-    r = requests.get(url, headers=headers, timeout=timeout)
+# ================= FAST FETCH: PARALLEL GATEWAY RACE =================
+_session = requests.Session()
+
+def _fetch_one_json(url: str, headers: dict, timeout: float):
+    r = _session.get(url, headers=headers, timeout=timeout)
     if r.status_code != 200:
         return None
     data = r.json()
-    if data and "data" in data and "list" in data["data"] and data["data"]["list"]:
-        return data["data"]["list"][0]
-    return None
+    lst = data.get("data", {}).get("list", [])
+    return lst[0] if lst else None
 
 async def fetch_latest_issue(mode: str):
     base_url = API_1M if mode == "1M" else API_30S
@@ -137,21 +138,36 @@ async def fetch_latest_issue(mode: str):
 
     headers = {
         "User-Agent": f"Mozilla/5.0 Chrome/{random.randint(110, 123)}.0.0.0 Safari/537.36",
-        "Referer": "https://dkwin9.com/",
         "Accept": "application/json",
         "Cache-Control": "no-cache",
         "Pragma": "no-cache",
+        "Connection": "keep-alive",
     }
 
-    timeout = 4.0 if mode == "30S" else 7.0
+    timeout = 2.0 if mode == "30S" else 3.5
 
-    for url in gateways:
+    tasks = [asyncio.to_thread(_fetch_one_json, url, headers, timeout) for url in gateways]
+    done, pending = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
+
+    for d in done:
         try:
-            res = await asyncio.to_thread(_fetch_one, url, headers, timeout)
+            res = d.result()
+            if res:
+                for p in pending:
+                    p.cancel()
+                return res
+        except:
+            pass
+
+    # if first completed had no data, check remaining quickly
+    for p in pending:
+        try:
+            res = await p
             if res:
                 return res
         except:
-            continue
+            pass
+
     return None
 
 # ================= DELETE HELPERS =================
@@ -161,7 +177,7 @@ async def safe_delete(context: ContextTypes.DEFAULT_TYPE, chat_id: int, message_
     except:
         pass
 
-# ================= CHECKING MESSAGE (STAYS FULL PERIOD) =================
+# ================= CHECKING MESSAGE (FULL PERIOD) =================
 async def start_checking_animation(context: ContextTypes.DEFAULT_TYPE, chat_id: int, issue: str, mode: str):
     base = (
         f"🛰 <b>PERIOD TRACKING</b>\n"
@@ -212,12 +228,12 @@ class PredictionEngine:
             return
 
         if (not self.raw_history) or (str(self.raw_history[0].get('issueNumber')) != str(issue_data.get('issueNumber'))):
-            self.history.insert(0, result_type)   # newest first
+            self.history.insert(0, result_type)
             self.raw_history.insert(0, issue_data)
-            self.history = self.history[:500]
-            self.raw_history = self.raw_history[:500]
+            self.history = self.history[:800]
+            self.raw_history = self.raw_history[:800]
 
-    # ✅ YOUR NEW LOGIC (momentum + flip + safety)
+    # ✅ YOUR LOGIC
     def get_pattern_signal(self, current_streak_loss):
         if not self.history:
             pred = random.choice(["BIG", "SMALL"])
@@ -225,19 +241,18 @@ class PredictionEngine:
             return pred
 
         last_result = self.history[0]
-        prediction = last_result  # PHASE 1 momentum copy
+        prediction = last_result
 
-        if current_streak_loss >= 2:  # PHASE 2 flip
+        if current_streak_loss >= 2:
             prediction = "SMALL" if last_result == "BIG" else "BIG"
 
-        if current_streak_loss >= 4:  # PHASE 3 safety breaker
+        if current_streak_loss >= 4:
             prediction = last_result
 
         self.last_prediction = prediction
         return prediction
 
     def calculate_confidence(self):
-        # fast + stable
         base = random.randint(86, 92)
         try:
             if len(self.history) >= 3 and self.history[0] == self.history[1] == self.history[2]:
@@ -254,7 +269,7 @@ class BotState:
         self.color_mode = True
         self.engine = PredictionEngine()
 
-        self.active_bet = None  # {"period","pick","check_mid","check_task"}
+        self.active_bet = None
         self.last_issue_seen = None
         self.last_period_processed = None
 
@@ -272,7 +287,7 @@ AUTHORIZED_USERS = set()
 def lock_all_users():
     AUTHORIZED_USERS.clear()
 
-# ================= UI / MENU =================
+# ================= UI =================
 def now_hms():
     return time.strftime("%H:%M:%S")
 
@@ -379,29 +394,42 @@ async def delete_all_loss_messages(context: ContextTypes.DEFAULT_TYPE):
     for mid in ids:
         await safe_delete(context, TARGET_CHANNEL, mid)
 
-# ================= FAST GAME LOOP =================
+# ================= INSTANT LOOP (BURST POLLING + JUMP FIX) =================
 async def game_loop(context: ContextTypes.DEFAULT_TYPE, sid: int):
-    fail = 0
-    # faster polling: 30S -> 0.6s, 1M -> 1.2s
-    fast_sleep = 0.6 if state.game_mode == "30S" else 1.2
+    # ultra fast for 30S, still safe for proxies
+    fast_sleep = 0.22 if state.game_mode == "30S" else 0.7
+    burst = 3 if state.game_mode == "30S" else 2
+    tiny_gap = 0.06
 
     while state.is_running and state.session_id == sid:
         try:
-            latest = await fetch_latest_issue(state.game_mode)
+            latest = None
+            for _ in range(burst):
+                latest = await fetch_latest_issue(state.game_mode)
+                if latest:
+                    break
+                await asyncio.sleep(tiny_gap)
+
             if not latest:
-                fail += 1
-                await asyncio.sleep(min(0.6 + fail * 0.4, 6))
+                await asyncio.sleep(0.6)
                 continue
 
-            fail = 0
             latest_issue = str(latest["issueNumber"])
             latest_num = str(latest["number"])
             latest_type = "BIG" if int(latest_num) >= 5 else "SMALL"
             next_issue = str(int(latest_issue) + 1)
 
-            # 1) NEW RESULT DETECTED -> process result immediately
+            # issue jump detector -> prevent "missed prediction"
+            if state.last_issue_seen is not None:
+                try:
+                    if int(latest_issue) - int(state.last_issue_seen) >= 2:
+                        state.active_bet = None
+                except:
+                    pass
+
+            # RESULT (instant)
             if state.active_bet and state.active_bet.get("period") == latest_issue and state.last_period_processed != latest_issue:
-                # stop checking animation + delete checking msg
+                # stop checking animation + delete check msg
                 try:
                     if state.active_bet.get("check_task"):
                         state.active_bet["check_task"].cancel()
@@ -421,7 +449,6 @@ async def game_loop(context: ContextTypes.DEFAULT_TYPE, sid: int):
                     state.stats["streak_loss"] = 0
                     state.stats["max_streak_win"] = max(state.stats["max_streak_win"], state.stats["streak_win"])
 
-                    # win sticker: any / pool / exact mix
                     try:
                         choice = random.choice(["ANY", "POOL", "EXACT"])
                         if choice == "ANY":
@@ -444,7 +471,6 @@ async def game_loop(context: ContextTypes.DEFAULT_TYPE, sid: int):
                     except:
                         pass
 
-                # result text (track if loss)
                 try:
                     mr = await context.bot.send_message(
                         TARGET_CHANNEL,
@@ -460,7 +486,6 @@ async def game_loop(context: ContextTypes.DEFAULT_TYPE, sid: int):
                 state.active_bet = None
                 state.last_period_processed = latest_issue
 
-                # auto stop at MAX_LOSS_STOP
                 if state.stats["streak_loss"] >= MAX_LOSS_STOP:
                     state.is_running = False
                     lock_all_users()
@@ -476,21 +501,16 @@ async def game_loop(context: ContextTypes.DEFAULT_TYPE, sid: int):
                         pass
                     return
 
-            # 2) SEND NEXT PREDICTION ASAP when we see a NEW latest_issue
-            #    (No extra 15s wait, just protect from duplicate send)
+            # NEW ISSUE DETECTED -> SEND NEXT PREDICTION IMMEDIATELY
             if state.last_issue_seen != latest_issue:
                 state.last_issue_seen = latest_issue
 
-                # if no active bet => create next bet immediately
                 if not state.active_bet:
                     state.engine.update_history(latest)
                     pred = state.engine.get_pattern_signal(state.stats["streak_loss"])
                     conf = state.engine.calculate_confidence()
-
-                    # save active bet for next_issue
                     state.active_bet = {"period": next_issue, "pick": pred}
 
-                    # optional color sticker
                     if state.color_mode:
                         try:
                             color_stk = COLOR_STICKERS["GREEN"] if pred == "BIG" else COLOR_STICKERS["RED"]
@@ -498,13 +518,11 @@ async def game_loop(context: ContextTypes.DEFAULT_TYPE, sid: int):
                         except:
                             pass
 
-                    # prediction sticker by mode
                     try:
                         await context.bot.send_sticker(TARGET_CHANNEL, PRED_STICKERS[state.game_mode][pred])
                     except:
                         pass
 
-                    # signal message
                     try:
                         await context.bot.send_message(
                             TARGET_CHANNEL,
@@ -528,12 +546,12 @@ async def game_loop(context: ContextTypes.DEFAULT_TYPE, sid: int):
             await asyncio.sleep(fast_sleep)
 
         except Exception:
-            await asyncio.sleep(0.8)
+            await asyncio.sleep(0.5)
 
 async def run_engine_forever(context: ContextTypes.DEFAULT_TYPE, sid: int):
     while state.is_running and state.session_id == sid:
         await game_loop(context, sid)
-        await asyncio.sleep(0.3)
+        await asyncio.sleep(0.2)
 
 # ================= HANDLERS =================
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -565,7 +583,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("❌ Wrong password", parse_mode=ParseMode.HTML)
         return
 
-    # toggle color
     if msg.startswith("🟩 Color: ON") or msg.startswith("⬜ Color: OFF"):
         state.color_mode = not state.color_mode
         await update.message.reply_text(
@@ -575,7 +592,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
 
-    # STOP
     if "Stop" in msg or msg == "/off":
         state.session_id += 1
         state.is_running = False
@@ -607,7 +623,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         lock_all_users()
         return
 
-    # CONNECT
     if "Connect" in msg:
         pw2 = await get_password(force_refresh=True)
         if not pw2:
@@ -638,7 +653,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             parse_mode=ParseMode.HTML
         )
 
-        # start sticker by mode
         try:
             await context.bot.send_sticker(TARGET_CHANNEL, START_STICKERS[state.game_mode])
         except:
