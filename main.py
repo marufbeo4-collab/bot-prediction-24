@@ -16,7 +16,7 @@ from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandl
 BOT_TOKEN = "8595453345:AAGMYQFxohNbvz16cZTcP8HF2mqydRMZjMI"  # ✅ শুধু এখানে টোকেন বসাবি
 
 TARGET_CHANNEL = -1003293007059
-BRAND_NAME = "⚡ 𝐃𝐊 𝐌𝐀𝐑𝐔𝐅 𝐎𝐅𝐅𝐈𝐂𝐈𝐀𝐋 𝟐𝟒/𝟕 𝐒𝐈𝐆𝐍𝐀𝐋"
+BRAND_NAME = "⚡⚡ 𝐃𝐊 𝐌𝐀𝐑𝐔𝐅 𝐎𝐅𝐅𝐈𝐂𝐈𝐀𝐋 𝟐𝟒/𝟕 𝐒𝐈𝐆𝐍𝐀𝐋"
 CHANNEL_LINK = "https://t.me/big_maruf_official0"
 
 SHEET_ID = "1foCsja-2HRi8HHjnMP8CyheaLOwk-ZiJ7a5uqs9khvo"
@@ -29,15 +29,17 @@ API_1M = "https://draw.ar-lottery01.com/WinGo/WinGo_1M/GetHistoryIssuePage.json"
 API_30S = "https://draw.ar-lottery01.com/WinGo/WinGo_30S/GetHistoryIssuePage.json"
 
 
-# ================= STICKERS (YOUR PROVIDED) =================
+# ================= STICKERS =================
+# ✅ 30S sticker swap fixed (BIG<->SMALL)
 PRED_STICKERS = {
     "1M": {
         "BIG": "CAACAgUAAxkBAAEQTr5pcwrBGAZ5xLp_AUAFWSiWiS0rOwAC4R0AAg7MoFcKItGd1m2CsjgE",
         "SMALL": "CAACAgUAAxkBAAEQTr9pcwrC7iH-Ei5xHz2QapE-DFkgLQACXxkAAoNWmFeTSY6h7y7VlzgE",
     },
     "30S": {
-        "BIG": "CAACAgUAAxkBAAEQTuVpczxpbSG9e1hL9__qlNP1gBnIsQAC-RQAAmC3GVT5I4duiXGKpzgE",
-        "SMALL": "CAACAgUAAxkBAAEQTuZpczxpS6btJ7B4he4btOzGXKbXWwAC2RMAAkYqGFTKz4vHebETgDgE",
+        # user said: 30S small sticker is showing at big and big showing at small -> swap
+        "BIG": "CAACAgUAAxkBAAEQTuZpczxpS6btJ7B4he4btOzGXKbXWwAC2RMAAkYqGFTKz4vHebETgDgE",
+        "SMALL": "CAACAgUAAxkBAAEQTuVpczxpbSG9e1hL9__qlNP1gBnIsQAC-RQAAmC3GVT5I4duiXGKpzgE",
     }
 }
 
@@ -69,7 +71,7 @@ SEASON_START = {
     "1M":  "CAACAgUAAxkBAAEQUrRpdYvESSIrn4-Lm936I6F8_BaN-wACChYAAuBHOVc6YQfcV-EKqjgE"
 }
 
-# ✅ This sticker must go "start & end always", but NOT during loss
+# ✅ must go start+end always, but NOT during loss
 HYPE_STICKER = "CAACAgUAAxkBAAEQTjRpcmWdzXBzA7e9KNz8QgTI6NXlxgACuRcAAh2x-FaJNjq4QG_DujgE"
 
 
@@ -149,7 +151,7 @@ async def fetch_latest_issue(mode):
         "Pragma": "no-cache",
     }
 
-    timeout = 5 if mode == "30S" else 8
+    timeout = 4 if mode == "30S" else 7
 
     for url in gateways:
         try:
@@ -161,61 +163,28 @@ async def fetch_latest_issue(mode):
     return None
 
 
-# ================= SAFE TELEGRAM SENDER (ANTI-SPAM BURST) =================
+# ================= FAST TELEGRAM SEQUENCE =================
 class TgSender:
     def __init__(self):
         self.q = asyncio.Queue()
 
-    async def start(self, context: ContextTypes.DEFAULT_TYPE):
+    async def start(self):
         while True:
-            fn, args = await self.q.get()
+            coro = await self.q.get()
             try:
-                await fn(*args)
+                await coro
             except:
                 pass
-            # ✅ anti-burst delay
-            await asyncio.sleep(0.7)
+            # ✅ very low delay (fast serial, less lag)
+            await asyncio.sleep(0.15)
 
-    async def send_sticker(self, context, chat_id, sticker_id, track_list=None):
-        async def _do():
-            m = await context.bot.send_sticker(chat_id, sticker_id)
-            if track_list is not None:
-                track_list.append(m.message_id)
-        await self.q.put((_do, tuple()))
+    async def enqueue(self, coro):
+        await self.q.put(coro)
 
-    async def send_message(self, context, chat_id, text, track_list=None):
-        async def _do():
-            m = await context.bot.send_message(
-                chat_id,
-                text,
-                parse_mode=ParseMode.HTML,
-                disable_web_page_preview=True
-            )
-            if track_list is not None:
-                track_list.append(m.message_id)
-        await self.q.put((_do, tuple()))
-
-    async def edit_message(self, context, chat_id, mid, text):
-        async def _do():
-            await context.bot.edit_message_text(
-                chat_id=chat_id,
-                message_id=mid,
-                text=text,
-                parse_mode=ParseMode.HTML,
-                disable_web_page_preview=True
-            )
-        await self.q.put((_do, tuple()))
-
-    async def delete_message(self, context, chat_id, mid):
-        async def _do():
-            try:
-                await context.bot.delete_message(chat_id, mid)
-            except:
-                pass
-        await self.q.put((_do, tuple()))
+sender = TgSender()
 
 
-# ================= ENGINE =================
+# ================= UI HELPERS =================
 AUTHORIZED_USERS = set()
 
 def now_hms():
@@ -230,12 +199,12 @@ def pick_badge(pred):
 def step_text(step):
     return f"{step} Step Loss" if step > 0 else "0 Step"
 
-def fmt_signal(next_issue, pred, conf, step_loss):
+def fmt_signal(next_issue, pred, conf, step_loss, mode):
     join = f"\n🔗 <a href='{CHANNEL_LINK}'><b>JOIN / REJOIN</b></a>" if CHANNEL_LINK else ""
     return (
         f"⚡ <b>{BRAND_NAME}</b>\n"
         f"━━━━━━━━━━━━━━━━━━━━\n"
-        f"🕹 <b>Mode</b>: <b>{mode_label(state.game_mode)}</b>\n"
+        f"🕹 <b>Mode</b>: <b>{mode_label(mode)}</b>\n"
         f"🧾 <b>Period</b>: <code>{next_issue}</code>\n"
         f"━━━━━━━━━━━━━━━━━━━━\n"
         f"🎯 <b>PREDICTION</b> ➜ {pick_badge(pred)}\n"
@@ -246,17 +215,17 @@ def fmt_signal(next_issue, pred, conf, step_loss):
         f"{join}"
     )
 
-def fmt_checking(next_issue, dots):
+def fmt_checking(wait_issue, mode):
     return (
         f"🛰 <b>LIVE CHECK</b>\n"
         f"━━━━━━━━━━━━━━━━━━━━\n"
-        f"🕹 <b>Mode</b>: <b>{mode_label(state.game_mode)}</b>\n"
-        f"🧾 <b>Waiting Result</b>: <code>{next_issue}</code>\n"
+        f"🕹 <b>Mode</b>: <b>{mode_label(mode)}</b>\n"
+        f"🧾 <b>Waiting Result</b>: <code>{wait_issue}</code>\n"
         f"━━━━━━━━━━━━━━━━━━━━\n"
-        f"⏳ <code>syncing{dots}</code>"
+        f"⏳ <code>syncing…</code>"
     )
 
-def fmt_result(issue, res_num, res_type, pick, is_win, step_loss, w, l, max_ls, max_ws, ws, ls):
+def fmt_result(issue, res_num, res_type, pick, is_win, step_loss, w, l, max_ls, max_ws, ws, mode):
     res_emoji = "🟢" if res_type == "BIG" else "🔴"
     header = "✅ <b>WIN CONFIRMED</b>" if is_win else "❌ <b>LOSS CONFIRMED</b>"
     extra = (f"🔥 <b>Win Streak</b>: {ws} (Max {max_ws})"
@@ -265,7 +234,7 @@ def fmt_result(issue, res_num, res_type, pick, is_win, step_loss, w, l, max_ls, 
     return (
         f"{header}\n"
         f"━━━━━━━━━━━━━━━━━━━━\n"
-        f"🕹 <b>Mode</b>: <b>{mode_label(state.game_mode)}</b>\n"
+        f"🕹 <b>Mode</b>: <b>{mode_label(mode)}</b>\n"
         f"🧾 <b>Period</b>: <code>{issue}</code>\n"
         f"━━━━━━━━━━━━━━━━━━━━\n"
         f"🎰 <b>Result</b>: {res_emoji} <b>{res_num}</b> (<b>{res_type}</b>)\n"
@@ -275,7 +244,7 @@ def fmt_result(issue, res_num, res_type, pick, is_win, step_loss, w, l, max_ls, 
         f"📊 <b>W</b>:{w} | <b>L</b>:{l} | <code>{now_hms()}</code>"
     )
 
-def fmt_summary():
+def fmt_summary(state):
     w = state.stats["wins"]
     l = state.stats["losses"]
     total = w + l
@@ -312,6 +281,7 @@ def fmt_consolation_stop():
     )
 
 
+# ================= ENGINE =================
 class PredictionEngine:
     def __init__(self):
         self.history = []
@@ -331,7 +301,7 @@ class PredictionEngine:
             self.history = self.history[:800]
             self.raw_history = self.raw_history[:800]
 
-    # ✅ YOUR NEW LOGIC (Trend 12 + loss>=3 flip)
+    # ✅ your final logic
     def get_pattern_signal(self, current_streak_loss):
         if len(self.history) < 12:
             pred = random.choice(["BIG", "SMALL"])
@@ -356,11 +326,10 @@ class PredictionEngine:
         return prediction
 
     def calculate_confidence(self):
-        # confidence slightly higher on streak signals
-        base = random.randint(86, 92)
+        base = random.randint(90, 94)
         try:
             if len(self.history) >= 3 and self.history[0] == self.history[1] == self.history[2]:
-                base = random.randint(92, 97)
+                base = random.randint(93, 97)
         except:
             pass
         return base
@@ -374,21 +343,15 @@ class BotState:
 
         self.engine = PredictionEngine()
 
-        # active_bet:
-        # {
-        #   "period": str, "pick": str,
-        #   "sent": bool,
-        #   "check_mid": int|None,
-        #   "check_task": task|None
-        # }
-        self.active_bet = None
+        # active_bet -> strict serial
+        self.active_bet = None  # {"period": str, "pick": str, "check_mid": int|None}
 
         self.last_seen_issue = None
         self.last_period_processed = None
 
         self.color_enabled = False
 
-        self.stop_requested = False  # ✅ stop after recovery system
+        self.stop_requested = False
 
         self.stats = {
             "wins": 0, "losses": 0,
@@ -396,45 +359,32 @@ class BotState:
             "max_streak_win": 0, "max_streak_loss": 0
         }
 
-        # track loss clutter to delete later
-        self.loss_message_ids = []
-
+        self.loss_message_ids = []  # delete on stop
 
 state = BotState()
 
 
-async def delete_loss_clutter(sender: TgSender, context: ContextTypes.DEFAULT_TYPE):
+async def delete_loss_clutter(context: ContextTypes.DEFAULT_TYPE):
     ids = state.loss_message_ids[:]
     state.loss_message_ids.clear()
     for mid in ids:
-        await sender.delete_message(context, TARGET_CHANNEL, mid)
-
-
-async def checking_anim(sender: TgSender, context: ContextTypes.DEFAULT_TYPE, mid: int, period: str):
-    dots = ""
-    while True:
         try:
-            dots = "." if dots == "" else (".." if dots == "." else ("..." if dots == ".." else ""))
-            await sender.edit_message(context, TARGET_CHANNEL, mid, fmt_checking(period, dots))
+            await context.bot.delete_message(TARGET_CHANNEL, mid)
         except:
             pass
-        await asyncio.sleep(1.0)
 
 
 async def engine_loop(context: ContextTypes.DEFAULT_TYPE):
-    sender = TgSender()
-    context.application.create_task(sender.start(context))
-
     fail_count = 0
 
     while state.is_running:
-        sid = state.session_id
+        my_sid = state.session_id
 
         try:
             latest = await fetch_latest_issue(state.game_mode)
             if not latest:
                 fail_count += 1
-                await asyncio.sleep(min(2 + fail_count, 12))
+                await asyncio.sleep(min(1 + fail_count, 8))
                 continue
             fail_count = 0
 
@@ -442,7 +392,7 @@ async def engine_loop(context: ContextTypes.DEFAULT_TYPE):
             latest_num = str(latest["number"])
             latest_type = "BIG" if int(latest_num) >= 5 else "SMALL"
 
-            # API jump -> resync (prevents random burst)
+            # resync on jump
             if state.last_seen_issue is not None:
                 try:
                     if int(latest_issue) > int(state.last_seen_issue) + 1:
@@ -454,34 +404,21 @@ async def engine_loop(context: ContextTypes.DEFAULT_TYPE):
 
             next_issue = str(int(latest_issue) + 1)
 
-            # ===== RESULT =====
-            if state.active_bet and state.active_bet.get("period") == latest_issue:
+            # =============== RESULT (only if we actually predicted that period) ===============
+            if state.active_bet and state.active_bet["period"] == latest_issue:
                 if state.last_period_processed == latest_issue:
-                    await asyncio.sleep(1)
+                    await asyncio.sleep(0.2)
                     continue
-
-                # if prediction wasn't sent -> don't send feedback
-                if not state.active_bet.get("sent", False):
-                    # cleanup checking
-                    if state.active_bet.get("check_task"):
-                        state.active_bet["check_task"].cancel()
-                    if state.active_bet.get("check_mid"):
-                        await sender.delete_message(context, TARGET_CHANNEL, state.active_bet["check_mid"])
-                    state.active_bet = None
-                    state.last_period_processed = latest_issue
-                    await asyncio.sleep(1)
-                    continue
-
-                # stop checking
-                if state.active_bet.get("check_task"):
-                    state.active_bet["check_task"].cancel()
-                if state.active_bet.get("check_mid"):
-                    await sender.delete_message(context, TARGET_CHANNEL, state.active_bet["check_mid"])
 
                 pick = state.active_bet["pick"]
+                check_mid = state.active_bet.get("check_mid")
+
+                # delete checking FIRST (fast clean)
+                if check_mid:
+                    await sender.enqueue(context.bot.delete_message(TARGET_CHANNEL, check_mid))
+
                 is_win = (pick == latest_type)
 
-                # update history
                 state.engine.update_history(latest)
 
                 if is_win:
@@ -490,14 +427,13 @@ async def engine_loop(context: ContextTypes.DEFAULT_TYPE):
                     state.stats["streak_loss"] = 0
                     state.stats["max_streak_win"] = max(state.stats["max_streak_win"], state.stats["streak_win"])
 
-                    # ✅ HYPE sticker on end (win) always (not during loss)
-                    await sender.send_sticker(context, TARGET_CHANNEL, HYPE_STICKER)
+                    # end hype (not during loss)
+                    await sender.enqueue(context.bot.send_sticker(TARGET_CHANNEL, HYPE_STICKER))
 
-                    # win sticker (type + random on streak)
                     pool = [WIN_ANY, (WIN_BIG if latest_type == "BIG" else WIN_SMALL)]
                     if state.stats["streak_win"] >= 2:
                         pool.append(random.choice(WIN_RANDOM_POOL))
-                    await sender.send_sticker(context, TARGET_CHANNEL, random.choice(pool))
+                    await sender.enqueue(context.bot.send_sticker(TARGET_CHANNEL, random.choice(pool)))
 
                 else:
                     state.stats["losses"] += 1
@@ -505,8 +441,11 @@ async def engine_loop(context: ContextTypes.DEFAULT_TYPE):
                     state.stats["streak_loss"] += 1
                     state.stats["max_streak_loss"] = max(state.stats["max_streak_loss"], state.stats["streak_loss"])
 
-                    # loss sticker (track)
-                    await sender.send_sticker(context, TARGET_CHANNEL, LOSS_ANY, track_list=state.loss_message_ids)
+                    # loss sticker + track for delete
+                    async def _loss_stk():
+                        m = await context.bot.send_sticker(TARGET_CHANNEL, LOSS_ANY)
+                        state.loss_message_ids.append(m.message_id)
+                    await sender.enqueue(_loss_stk())
 
                 # result message
                 txt = fmt_result(
@@ -514,86 +453,105 @@ async def engine_loop(context: ContextTypes.DEFAULT_TYPE):
                     state.stats["streak_loss"],
                     state.stats["wins"], state.stats["losses"],
                     state.stats["max_streak_loss"], state.stats["max_streak_win"],
-                    state.stats["streak_win"], state.stats["streak_loss"],
+                    state.stats["streak_win"],
+                    state.game_mode
                 )
+
                 if not is_win:
-                    await sender.send_message(context, TARGET_CHANNEL, txt, track_list=state.loss_message_ids)
+                    async def _loss_msg():
+                        m = await context.bot.send_message(
+                            TARGET_CHANNEL, txt,
+                            parse_mode=ParseMode.HTML, disable_web_page_preview=True
+                        )
+                        state.loss_message_ids.append(m.message_id)
+                    await sender.enqueue(_loss_msg())
                 else:
-                    await sender.send_message(context, TARGET_CHANNEL, txt)
+                    await sender.enqueue(context.bot.send_message(
+                        TARGET_CHANNEL, txt,
+                        parse_mode=ParseMode.HTML, disable_web_page_preview=True
+                    ))
 
                 state.active_bet = None
                 state.last_period_processed = latest_issue
 
-                # ✅ stop-after-recovery feature
+                # stop-after-recovery
                 if state.stop_requested and state.stats["streak_loss"] == 0:
                     state.is_running = False
                     state.stop_requested = False
                     AUTHORIZED_USERS.clear()
-                    await delete_loss_clutter(sender, context)
-                    await sender.send_message(context, TARGET_CHANNEL, fmt_summary())
+                    await delete_loss_clutter(context)
+                    await context.bot.send_message(
+                        TARGET_CHANNEL, fmt_summary(state),
+                        parse_mode=ParseMode.HTML, disable_web_page_preview=True
+                    )
                     return
 
-                # auto stop on max loss
+                # auto stop on 8 loss
                 if state.stats["streak_loss"] >= MAX_LOSS_STOP:
                     state.is_running = False
                     state.stop_requested = False
                     AUTHORIZED_USERS.clear()
-                    await delete_loss_clutter(sender, context)
-                    await sender.send_message(context, TARGET_CHANNEL, fmt_consolation_stop())
-                    await sender.send_message(context, TARGET_CHANNEL, fmt_summary())
+                    await delete_loss_clutter(context)
+                    await context.bot.send_message(
+                        TARGET_CHANNEL, fmt_consolation_stop(),
+                        parse_mode=ParseMode.HTML, disable_web_page_preview=True
+                    )
+                    await context.bot.send_message(
+                        TARGET_CHANNEL, fmt_summary(state),
+                        parse_mode=ParseMode.HTML, disable_web_page_preview=True
+                    )
                     return
 
-            # ===== SIGNAL =====
-            if (state.active_bet is None) and (state.last_period_processed != next_issue):
+            # =============== SIGNAL (STRICT SERIAL: only when no active bet) ===============
+            if state.active_bet is None and state.last_period_processed != next_issue:
                 state.engine.update_history(latest)
 
                 pred = state.engine.get_pattern_signal(state.stats["streak_loss"])
                 conf = state.engine.calculate_confidence()
 
-                state.active_bet = {"period": next_issue, "pick": pred, "sent": False, "check_mid": None, "check_task": None}
+                # create bet first to lock serial
+                state.active_bet = {"period": next_issue, "pick": pred, "check_mid": None}
 
-                # ✅ HYPE sticker on start always, but NOT during loss
+                # (1) sticker first
+                # start hype only if not in loss
                 if state.stats["streak_loss"] == 0:
-                    await sender.send_sticker(context, TARGET_CHANNEL, HYPE_STICKER)
+                    await sender.enqueue(context.bot.send_sticker(TARGET_CHANNEL, HYPE_STICKER))
+                await sender.enqueue(context.bot.send_sticker(TARGET_CHANNEL, PRED_STICKERS[state.game_mode][pred]))
 
-                # prediction stickers
-                await sender.send_sticker(context, TARGET_CHANNEL, PRED_STICKERS[state.game_mode][pred])
-
-                # color sticker optional
+                # optional color sticker
                 if state.color_enabled:
-                    # BIG -> GREEN, SMALL -> RED
-                    await sender.send_sticker(context, TARGET_CHANNEL, COLOR_STICKERS["GREEN" if pred == "BIG" else "RED"])
+                    await sender.enqueue(context.bot.send_sticker(
+                        TARGET_CHANNEL,
+                        COLOR_STICKERS["GREEN" if pred == "BIG" else "RED"]
+                    ))
 
-                # signal message (mark sent only if enqueue success)
-                try:
-                    await sender.send_message(context, TARGET_CHANNEL, fmt_signal(next_issue, pred, conf, state.stats["streak_loss"]))
-                    state.active_bet["sent"] = True
-                except:
-                    state.active_bet = None
+                # (2) message
+                await sender.enqueue(context.bot.send_message(
+                    TARGET_CHANNEL,
+                    fmt_signal(next_issue, pred, conf, state.stats["streak_loss"], state.game_mode),
+                    parse_mode=ParseMode.HTML,
+                    disable_web_page_preview=True
+                ))
 
-                # checking message + animation
-                if state.active_bet and state.active_bet["sent"]:
-                    # send checking message first (we need message id)
-                    # we do direct send to get id (1 time)
-                    try:
-                        m = await context.bot.send_message(
-                            TARGET_CHANNEL,
-                            fmt_checking(next_issue, ""),
-                            parse_mode=ParseMode.HTML,
-                            disable_web_page_preview=True
-                        )
+                # (3) checking message (single send, no edit)
+                async def _send_check():
+                    m = await context.bot.send_message(
+                        TARGET_CHANNEL,
+                        fmt_checking(next_issue, state.game_mode),
+                        parse_mode=ParseMode.HTML,
+                        disable_web_page_preview=True
+                    )
+                    if state.active_bet and state.active_bet.get("period") == next_issue:
                         state.active_bet["check_mid"] = m.message_id
-                        state.active_bet["check_task"] = asyncio.create_task(checking_anim(sender, context, m.message_id, next_issue))
-                    except:
-                        pass
+                await sender.enqueue(_send_check())
 
-            await asyncio.sleep(1 if state.game_mode == "30S" else 2)
+            await asyncio.sleep(0.45 if state.game_mode == "30S" else 0.9)
 
         except Exception:
-            await asyncio.sleep(2)
+            await asyncio.sleep(1.0)
 
-        if state.session_id != sid:
-            await asyncio.sleep(1)
+        if state.session_id != my_sid:
+            await asyncio.sleep(0.5)
 
 
 # ================= MENU / HANDLERS =================
@@ -634,7 +592,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("⚠️ Password system offline (Sheet not reachable).", parse_mode=ParseMode.HTML)
         return
 
-    # AUTH
     if uid not in AUTHORIZED_USERS:
         if msg == pw:
             AUTHORIZED_USERS.add(uid)
@@ -643,7 +600,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("❌ Wrong password", parse_mode=ParseMode.HTML)
         return
 
-    # Toggle color
     if msg.startswith("🎨 Color:"):
         state.color_enabled = not state.color_enabled
         await update.message.reply_text(
@@ -655,8 +611,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # STOP
     if "Stop" in msg or msg == "/off":
-        # ✅ Stop-after-recovery:
-        # যদি loss চলতে থাকে -> stop_requested True, recovery win না হওয়া পর্যন্ত চলবে
+        # if loss running -> stop after recovery win
         if state.is_running and state.stats["streak_loss"] > 0:
             state.stop_requested = True
             await update.message.reply_text(
@@ -666,42 +621,25 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             return
 
-        # no loss -> stop immediately
         state.session_id += 1
         state.is_running = False
         state.stop_requested = False
 
-        # cancel checking
-        if state.active_bet:
+        # delete pending checking
+        if state.active_bet and state.active_bet.get("check_mid"):
             try:
-                if state.active_bet.get("check_task"):
-                    state.active_bet["check_task"].cancel()
+                await context.bot.delete_message(TARGET_CHANNEL, state.active_bet["check_mid"])
             except:
                 pass
-            if state.active_bet.get("check_mid"):
-                try:
-                    await context.bot.delete_message(TARGET_CHANNEL, state.active_bet["check_mid"])
-                except:
-                    pass
         state.active_bet = None
 
         await update.message.reply_text("🛑 Stopping…", reply_markup=ReplyKeyboardRemove(), parse_mode=ParseMode.HTML)
-
-        # delete loss clutter + send summary
-        try:
-            for mid in state.loss_message_ids[:]:
-                try:
-                    await context.bot.delete_message(TARGET_CHANNEL, mid)
-                except:
-                    pass
-            state.loss_message_ids.clear()
-        except:
-            pass
+        await delete_loss_clutter(context)
 
         try:
             await context.bot.send_message(
                 TARGET_CHANNEL,
-                fmt_summary(),
+                fmt_summary(state),
                 parse_mode=ParseMode.HTML,
                 disable_web_page_preview=True
             )
@@ -713,7 +651,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # CONNECT
     if "Connect" in msg:
-        # refresh password on every start
         pw2 = await get_password(force_refresh=True)
         if not pw2:
             await update.message.reply_text("⚠️ Password system offline (Sheet not reachable).", parse_mode=ParseMode.HTML)
@@ -726,7 +663,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # reset state
         state.is_running = True
         state.stop_requested = False
-
         state.engine = PredictionEngine()
         state.active_bet = None
         state.last_seen_issue = None
@@ -745,7 +681,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             parse_mode=ParseMode.HTML
         )
 
-        # Season start sticker
         try:
             await context.bot.send_sticker(TARGET_CHANNEL, SEASON_START[mode])
         except:
@@ -763,7 +698,12 @@ if __name__ == "__main__":
     if not BOT_TOKEN or "PASTE_TOKEN_HERE" in BOT_TOKEN:
         raise RuntimeError("BOT_TOKEN missing! Replace PASTE_TOKEN_HERE in main.py")
 
-    app_telegram = Application.builder().token(BOT_TOKEN).build()
+    # start sender queue
+    async def _bootstrap(app: Application):
+        app.create_task(sender.start())
+
+    app_telegram = Application.builder().token(BOT_TOKEN).post_init(_bootstrap).build()
+
     app_telegram.add_handler(CommandHandler("start", start))
     app_telegram.add_handler(CommandHandler("off", handle_message))
     app_telegram.add_handler(MessageHandler(filters.TEXT, handle_message))
