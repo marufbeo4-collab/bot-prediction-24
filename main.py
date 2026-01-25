@@ -12,7 +12,7 @@ import random
 import time
 from dataclasses import dataclass, field
 from threading import Thread
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional
 
 import requests
 from flask import Flask
@@ -26,6 +26,7 @@ from telegram.ext import (
     CommandHandler,
     ContextTypes,
     MessageHandler,
+    CallbackQueryHandler,
     filters
 )
 
@@ -38,19 +39,17 @@ BOT_TOKEN = "8595453345:AAGMYQFxohNbvz16cZTcP8HF2mqydRMZjMI"  # <-- only token p
 BRAND_NAME = "⚡⚡⚡ 𝐃𝐊 𝐌𝐀𝐑𝐔𝐅 𝐎𝐅𝐅𝐈𝐂𝐈𝐀𝐋 𝟐𝟒/𝟕 𝐒𝐈𝐆𝐍𝐀𝐋"
 REJOIN_LINK = "https://t.me/big_maruf_official0"
 
-# 3 Targets (you gave)
+# Targets
 TARGETS = {
     "MAIN_GROUP": -1003293007059,
     "VIP": -1002892329434,
     "PUBLIC": -1002629495753,
 }
 
-# Password (you wanted from sheet, but optional)
-# যদি তুমি sheet password system use করো, নিচের link টা public হলে কাজ করবে
-SHEET_URL = "https://docs.google.com/spreadsheets/d/1foCsja-2HRi8HHjnMP8CyheaLOwk-ZiJ7a5uqs9khvo/edit?usp=sharing"
+# Sheet password (A1)
 SHEET_CELL_A1_CSV = "https://docs.google.com/spreadsheets/d/1foCsja-2HRi8HHjnMP8CyheaLOwk-ZiJ7a5uqs9khvo/export?format=csv&gid=0"
 
-# ====== API ======
+# API
 API_1M = "https://draw.ar-lottery01.com/WinGo/WinGo_1M/GetHistoryIssuePage.json"
 API_30S = "https://draw.ar-lottery01.com/WinGo/WinGo_30S/GetHistoryIssuePage.json"
 
@@ -59,24 +58,20 @@ API_30S = "https://draw.ar-lottery01.com/WinGo/WinGo_30S/GetHistoryIssuePage.jso
 # ===========================
 
 STICKERS = {
-    # 1M prediction stickers
+    # 1M prediction
     "PRED_1M_BIG": "CAACAgUAAxkBAAEQTr5pcwrBGAZ5xLp_AUAFWSiWiS0rOwAC4R0AAg7MoFcKItGd1m2CsjgE",
     "PRED_1M_SMALL": "CAACAgUAAxkBAAEQTr9pcwrC7iH-Ei5xHz2QapE-DFkgLQACXxkAAoNWmFeTSY6h7y7VlzgE",
 
-    # 30S prediction stickers (SWAP FIX as you requested)
-    # You said: 30s small was in big place and 30s big was in small place -> fixed here
+    # 30S prediction (SWAP FIXED)
     "PRED_30S_BIG": "CAACAgUAAxkBAAEQTuZpczxpS6btJ7B4he4btOzGXKbXWwAC2RMAAkYqGFTKz4vHebETgDgE",
     "PRED_30S_SMALL": "CAACAgUAAxkBAAEQTuVpczxpbSG9e1hL9__qlNP1gBnIsQAC-RQAAmC3GVT5I4duiXGKpzgE",
 
-    # Win (base)
+    # Win/Loss
     "WIN_BIG": "CAACAgUAAxkBAAEQTjhpcmXknd41yv99at8qxdgw3ivEkAACyRUAAraKsFSky2Ut1kt-hjgE",
     "WIN_SMALL": "CAACAgUAAxkBAAEQTjlpcmXkF8R0bNj0jb1Xd8NF-kaTSQAC7DQAAhnRsVTS3-Z8tj-kajgE",
     "WIN_ANY": "CAACAgUAAxkBAAEQTydpcz9Kv1L2PJyNlbkcZpcztKKxfQACDRsAAoq1mFcAAYLsJ33TdUA4BA",
-
-    # Loss
     "LOSS": "CAACAgUAAxkBAAEQTytpcz9VQoHyZ5ClbKSqKCJbpqX6yQACahYAAl1wAAFUL9xOdyh8UL84BA",
 
-    # Random win extras
     "WIN_RANDOM": [
         "CAACAgUAAxkBAAEQTzNpcz9ns8rx_5xmxk4HHQOJY2uUQQAC3RoAAuCpcFbMKj0VkxPOdTgE",
         "CAACAgUAAxkBAAEQTzRpcz9ni_I4CjwFZ3iSt4xiXxFgkwACkxgAAnQKcVYHd8IiRqfBXTgE",
@@ -90,29 +85,16 @@ STICKERS = {
         "CAACAgUAAxkBAAEQUCdpc4IuoaqPZ-5vn2RTlJZ_kbeXHQACXRUAAgln-FQ8iTzzJg_GLzgE",
     ],
 
-    # Color on/off sticker options
+    # Color
     "COLOR_RED": "CAACAgUAAxkBAAEQUClpc4JDd9n_ZQ45hPk-a3tEjFXnugACbhgAAqItoVd2zRs4VkXOHDgE",
     "COLOR_GREEN": "CAACAgUAAxkBAAEQUCppc4JDHWjTzBCFIOx2Hcjtz9UnnAACzRwAAnR3oVejA9DVGekyYTgE",
 
-    # Start stickers by mode (you gave)
+    # Start by mode
     "START_30S": "CAACAgUAAxkBAAEQUrNpdYvDXIBff9O8TCRlI3QYJgfGiAAC1RQAAjGFMVfjtqxbDWbuEzgE",
     "START_1M": "CAACAgUAAxkBAAEQUrRpdYvESSIrn4-Lm936I6F8_BaN-wACChYAAuBHOVc6YQfcV-EKqjgE",
 
-    # Always show start/end sticker (you requested)
+    # Always badge (start/end)
     "ALWAYS_BADGE": "CAACAgUAAxkBAAEQTjRpcmWdzXBzA7e9KNz8QgTI6NXlxgACuRcAAh2x-FaJNjq4QG_DujgE",
-
-    # Super Win streak 2-10
-    "STREAK_WINS": {
-        2: "CAACAgUAAxkBAAEQTiBpcmUfm9aQmlIHtPKiG2nE2e6EeAACcRMAAiLWqFSpdxWmKJ1TXzgE",
-        3: "CAACAgUAAxkBAAEQTiFpcmUgdgJQ_czeoFyRhNZiZI2lwwAC8BcAAv8UqFSVBQEdUW48HTgE",
-        4: "CAACAgUAAxkBAAEQTiJpcmUgSydN-tKxoSVdFuAvCcJ3fQACvSEAApMRqFQoUYBnH5Pc7TgE",
-        5: "CAACAgUAAxkBAAEQTiNpcmUgu_dP3wKT2k94EJCiw3u52QACihoAArkfqFSlrldtXbLGGDgE",
-        6: "CAACAgUAAxkBAAEQTiRpcmUhQJUjd2ukdtfEtBjwtMH4MAACWRgAAsTFqVTato0SmSN-6jgE",
-        7: "CAACAgUAAxkBAAEQTiVpcmUhha9HAAF19fboYayfUrm3tdYAAioXAAIHgKhUD0QmGyF5Aug4BA",
-        8: "CAACAgUAAxkBAAEQTixpcmUmevnNEqUbr0qbbVgW4psMNQACMxUAAow-qFSnSz4Ik1ddNzgE",
-        9: "CAACAgUAAxkBAAEQTi1pcmUmpSxAHo2pvR-GjCPTmkLr0AACLh0AAhCRqFRH5-2YyZKq1jgE",
-        10:"CAACAgUAAxkBAAEQTi5pcmUmjmjp7oXg4InxI1dGYruxDwACqBgAAh19qVT6X_-oEywCkzgE",
-    }
 }
 
 # ===========================
@@ -126,7 +108,7 @@ def home():
     return "DK MARUF BOT ALIVE ✅"
 
 def run_http():
-    port = int(os.environ.get("PORT", "8080"))
+    port = int(os.environ.get("PORT", "10000"))
     app.run(host="0.0.0.0", port=port)
 
 def keep_alive():
@@ -134,7 +116,7 @@ def keep_alive():
     t.start()
 
 # ===========================
-# Utilities
+# Utils
 # ===========================
 
 def bd_now_str() -> str:
@@ -152,6 +134,10 @@ def pred_sticker_for(mode: str, pred: str) -> str:
         return STICKERS["PRED_30S_BIG"] if pred == "BIG" else STICKERS["PRED_30S_SMALL"]
     return STICKERS["PRED_1M_BIG"] if pred == "BIG" else STICKERS["PRED_1M_SMALL"]
 
+def color_name_from_pick(pick: str) -> str:
+    # BIG = GREEN, SMALL = RED
+    return "GREEN" if pick == "BIG" else "RED"
+
 def safe_int(x, default=0) -> int:
     try:
         return int(x)
@@ -162,12 +148,11 @@ def safe_int(x, default=0) -> int:
 # Password from Sheet (A1)
 # ===========================
 
-def fetch_password_from_sheet(timeout=5) -> Optional[str]:
+def fetch_password_from_sheet(timeout=6) -> Optional[str]:
     try:
         r = requests.get(SHEET_CELL_A1_CSV, timeout=timeout)
         if r.status_code != 200:
             return None
-        # CSV first cell
         val = (r.text or "").strip().splitlines()[0].split(",")[0].strip().strip('"')
         return val if val else None
     except Exception:
@@ -177,7 +162,7 @@ def fetch_password_from_sheet(timeout=5) -> Optional[str]:
 # Multi-gateway fetch (requests + rotation)
 # ===========================
 
-def fetch_latest_issue_sync(mode: str) -> Optional[Dict]:
+def fetch_latest_issue_sync(mode: str) -> Optional[dict]:
     base = api_url_for(mode)
     ts = int(time.time() * 1000)
 
@@ -190,9 +175,8 @@ def fetch_latest_issue_sync(mode: str) -> Optional[Dict]:
     ]
 
     headers = {
-        "User-Agent": f"Mozilla/5.0 Chrome/{random.randint(110, 125)}.0.0.0 Safari/537.36",
+        "User-Agent": f"Mozilla/5.0 Chrome/{random.randint(110,125)}.0.0.0 Safari/537.36",
         "Accept": "application/json",
-        "Referer": "https://dkwin9.com/",
         "Cache-Control": "no-cache",
     }
 
@@ -208,10 +192,9 @@ def fetch_latest_issue_sync(mode: str) -> Optional[Dict]:
             return issue_list[0]
         except Exception:
             continue
-
     return None
 
-async def fetch_latest_issue(mode: str) -> Optional[Dict]:
+async def fetch_latest_issue(mode: str) -> Optional[dict]:
     return await asyncio.to_thread(fetch_latest_issue_sync, mode)
 
 # ===========================
@@ -220,52 +203,41 @@ async def fetch_latest_issue(mode: str) -> Optional[Dict]:
 
 class PredictionEngine:
     def __init__(self):
-        self.history: List[str] = []         # ["BIG"/"SMALL"] newest first
-        self.raw_history: List[Dict] = []    # newest first
+        self.history: List[str] = []
+        self.raw_history: List[dict] = []
         self.last_prediction: Optional[str] = None
 
-    def update_history(self, issue_data: Dict):
+    def update_history(self, issue_data: dict):
         num = safe_int(issue_data.get("number"), None)
         issue_no = issue_data.get("issueNumber")
         if num is None or issue_no is None:
             return
-
         result_type = "BIG" if num >= 5 else "SMALL"
 
         if (not self.raw_history) or (self.raw_history[0].get("issueNumber") != issue_no):
             self.history.insert(0, result_type)
             self.raw_history.insert(0, issue_data)
-
-            self.history = self.history[:60]
-            self.raw_history = self.raw_history[:60]
+            self.history = self.history[:80]
+            self.raw_history = self.raw_history[:80]
 
     def get_pattern_signal(self, current_streak_loss: int):
-        # history too short -> random
         if len(self.history) < 15:
             return random.choice(["BIG", "SMALL"])
 
         h = self.history
         votes: List[str] = []
 
-        # Trend majority (last 12)
         last_12 = h[:12]
         votes.append("BIG" if last_12.count("BIG") > last_12.count("SMALL") else "SMALL")
-
-        # Dragon follower
         votes.append(h[0])
-
-        # Anti last
         votes.append("SMALL" if h[0] == "BIG" else "BIG")
 
-        # streak 3 same
         if h[0] == h[1] == h[2]:
             votes.append(h[0])
 
-        # AABB pattern
         if h[0] == h[1] and h[2] == h[3] and h[1] != h[2]:
             votes.append("SMALL" if h[0] == "BIG" else "BIG")
 
-        # Math section
         try:
             r_num = safe_int(self.raw_history[0].get("number"), 0)
             p_digit = safe_int(str(self.raw_history[0].get("issueNumber", 0))[-1], 0)
@@ -278,30 +250,27 @@ class PredictionEngine:
         except Exception:
             pass
 
-        # History matching (last 3 pattern)
         current_pat = h[:3]
         mb, ms = 0, 0
         for i in range(1, len(h) - 3):
             if h[i:i+3] == current_pat:
                 nxt = h[i-1]
-                if nxt == "BIG": mb += 1
-                else: ms += 1
+                mb += 1 if nxt == "BIG" else 0
+                ms += 1 if nxt == "SMALL" else 0
         if mb > ms:
             votes.append("BIG")
         elif ms > mb:
             votes.append("SMALL")
 
-        # reverse trap (extra weight)
         votes.append(h[0])
 
-        # loss recovery
         if current_streak_loss >= 2 and self.last_prediction:
             rec_vote = "SMALL" if self.last_prediction == "BIG" else "BIG"
             votes.extend([rec_vote, rec_vote, rec_vote])
 
-        # final
         big_votes = votes.count("BIG")
         small_votes = votes.count("SMALL")
+
         if big_votes > small_votes:
             prediction = "BIG"
         elif small_votes > big_votes:
@@ -309,7 +278,6 @@ class PredictionEngine:
         else:
             prediction = h[0]
 
-        # emergency override
         if current_streak_loss >= 4:
             prediction = h[0]
 
@@ -317,7 +285,6 @@ class PredictionEngine:
         return prediction
 
     def confidence(self, streak_loss: int) -> int:
-        # keep it stable & smooth
         base = random.randint(86, 93)
         if streak_loss >= 2:
             base = random.randint(87, 95)
@@ -333,14 +300,14 @@ class PredictionEngine:
 class ActiveBet:
     period: str
     pick: str
-    pred_msg_ids: Dict[int, int] = field(default_factory=dict)     # chat_id -> message_id
-    check_msg_ids: Dict[int, int] = field(default_factory=dict)    # chat_id -> message_id
+    check_msg_ids: Dict[int, int] = field(default_factory=dict)
 
 @dataclass
 class BotState:
     running: bool = False
     mode: str = "30S"
     engine: PredictionEngine = field(default_factory=PredictionEngine)
+
     active_bet: Optional[ActiveBet] = None
     last_period_processed: Optional[str] = None
 
@@ -351,29 +318,29 @@ class BotState:
     max_win_streak: int = 0
     max_loss_streak: int = 0
 
-    # control
     stop_event: asyncio.Event = field(default_factory=asyncio.Event)
     engine_task: Optional[asyncio.Task] = None
 
-    # security/auth
     authorized_users: set = field(default_factory=set)
 
-    # selection
     selected_targets: List[int] = field(default_factory=lambda: [TARGETS["MAIN_GROUP"]])
     color_mode: bool = True
 
-    # graceful stop: if stop pressed during loss recovery, keep going until recover (streak_loss -> 0)
     graceful_stop_requested: bool = False
 
 state = BotState()
 
 # ===========================
-# Messaging (Premium style)
+# Premium messages
 # ===========================
 
 def format_prediction_msg(mode: str, period: str, pred: str, conf: int, step_loss: int) -> str:
     emoji = "🟢🟢" if pred == "BIG" else "🔴🔴"
-    step_txt = f"{step_loss} Step" if step_loss == 0 else f"{step_loss} Step Loss"
+    step_txt = "0 Step" if step_loss == 0 else f"{step_loss} Step Loss"
+    color_line = ""
+    if state.color_mode:
+        color_line = f"\n🎨 <b>Color Pick</b> ➜ <b>{color_name_from_pick(pred)}</b>"
+
     return (
         f"{BRAND_NAME}\n"
         f"━━━━━━━━━━━━━━━━━━━━\n"
@@ -382,7 +349,8 @@ def format_prediction_msg(mode: str, period: str, pred: str, conf: int, step_los
         f"━━━━━━━━━━━━━━━━━━━━\n"
         f"🎯 <b>PREDICTION</b> ➜ {emoji} <b>{pred}</b> {emoji}\n"
         f"📈 <b>Confidence</b> ➜ <b>{conf}%</b>\n"
-        f"🧠 <b>Recovery</b> ➜ <b>{step_txt}</b> / <b>8</b>\n"
+        f"🧠 <b>Recovery</b> ➜ <b>{step_txt}</b> / <b>8</b>"
+        f"{color_line}\n"
         f"🕒 <b>BD Time</b> ➜ <b>{bd_now_str()}</b>\n"
         f"━━━━━━━━━━━━━━━━━━━━\n"
         f"🔗 <b>JOIN / REJOIN</b> ➜ <a href='{REJOIN_LINK}'>CLICK HERE</a>"
@@ -398,12 +366,20 @@ def format_checking_msg(mode: str, waiting_period: str) -> str:
         f"⏳ <i>syncing…</i>"
     )
 
-def format_result_msg(mode: str, period: str, res_num: int, res_type: str, pick: str, is_win: bool,
-                      w: int, l: int, step_loss: int, max_w_streak: int) -> str:
+def format_result_msg(mode: str, period: str, res_num: int, res_type: str, pick: str, is_win: bool) -> str:
     head = "✅ <b>WIN CONFIRMED</b>" if is_win else "❌ <b>LOSS CONFIRMED</b>"
     res_emoji = "🟢" if res_type == "BIG" else "🔴"
     pick_emoji = "🟢🟢" if pick == "BIG" else "🔴🔴"
-    step_line = f"{step_loss} Step" if step_loss == 0 else f"{step_loss} Step Loss"
+    step_line = "0 Step" if state.streak_loss == 0 else f"{state.streak_loss} Step Loss"
+
+    # color win text
+    color_text = ""
+    if state.color_mode and is_win:
+        # If pick won, then the picked color won
+        color_text = f"\n🎨 <b>Color Win:</b> <b>{color_name_from_pick(pick)}</b> ✅"
+    elif state.color_mode and (not is_win):
+        color_text = f"\n🎨 <b>Color:</b> <b>{color_name_from_pick(pick)}</b> ❌"
+
     return (
         f"{head}\n"
         f"━━━━━━━━━━━━━━━━━━━━\n"
@@ -412,10 +388,11 @@ def format_result_msg(mode: str, period: str, res_num: int, res_type: str, pick:
         f"━━━━━━━━━━━━━━━━━━━━\n"
         f"🎰 <b>Result:</b> {res_emoji} <b>{res_num} ({res_type})</b>\n"
         f"🎯 <b>Your Pick:</b> {pick_emoji} <b>{pick}</b>\n"
+        f"{color_text}\n"
         f"━━━━━━━━━━━━━━━━━━━━\n"
         f"⚠️ <b>{step_line}</b> / <b>8</b>\n"
-        f"📊 <b>W:{w}</b> | <b>L:{l}</b> | <show>{bd_now_str()}</show>\n"
-        f"🔥 <b>Max Win Streak:</b> <b>{max_w_streak}</b>"
+        f"📊 <b>W:{state.wins}</b> | <b>L:{state.losses}</b> | <b>{bd_now_str()}</b>\n"
+        f"🔥 <b>Max Win Streak:</b> <b>{state.max_win_streak}</b>"
     )
 
 def format_summary(mode: str) -> str:
@@ -438,11 +415,10 @@ def format_summary(mode: str) -> str:
     )
 
 # ===========================
-# Send helpers (multi target)
+# Send helpers
 # ===========================
 
 async def send_to_targets(bot, method: str, *args, **kwargs):
-    # method: "send_message" / "send_sticker"
     for chat_id in state.selected_targets:
         try:
             fn = getattr(bot, method)
@@ -468,16 +444,36 @@ async def delete_msg_ids(bot, msg_ids: Dict[int, int]):
             pass
 
 # ===========================
-# Engine loop (No extra signal after stop)
+# Engine loop
 # ===========================
+
+async def stop_session(context: ContextTypes.DEFAULT_TYPE):
+    state.running = False
+    state.stop_event.set()
+    state.graceful_stop_requested = False
+
+    await send_to_targets(context.bot, "send_sticker", STICKERS["ALWAYS_BADGE"])
+    await send_to_targets(
+        context.bot,
+        "send_message",
+        format_summary(state.mode),
+        parse_mode=ParseMode.HTML,
+        disable_web_page_preview=True
+    )
+
+    if state.engine_task and (not state.engine_task.done()):
+        state.engine_task.cancel()
+        try:
+            await state.engine_task
+        except Exception:
+            pass
+    state.engine_task = None
 
 async def engine_loop(context: ContextTypes.DEFAULT_TYPE):
     logging.info("Engine loop started ✅")
     state.stop_event.clear()
 
-    # always badge at session start (but NOT during loss as you asked)
     await send_to_targets(context.bot, "send_sticker", STICKERS["ALWAYS_BADGE"])
-    # start sticker by mode
     await send_to_targets(context.bot, "send_sticker", STICKERS["START_30S"] if state.mode == "30S" else STICKERS["START_1M"])
 
     while state.running and (not state.stop_event.is_set()):
@@ -491,12 +487,10 @@ async def engine_loop(context: ContextTypes.DEFAULT_TYPE):
             latest_num = safe_int(latest.get("number"), 0)
             latest_type = "BIG" if latest_num >= 5 else "SMALL"
 
-            # update history always
             state.engine.update_history(latest)
 
-            # 1) Handle result if we had an active bet for this period
+            # Resolve result if active bet matches
             if state.active_bet and state.active_bet.period == latest_issue:
-                # avoid duplicate
                 if state.last_period_processed == latest_issue:
                     await asyncio.sleep(0.2)
                     continue
@@ -504,25 +498,20 @@ async def engine_loop(context: ContextTypes.DEFAULT_TYPE):
                 pick = state.active_bet.pick
                 is_win = (pick == latest_type)
 
-                # delete checking message first (smooth)
+                # delete checking msg
                 await delete_msg_ids(context.bot, state.active_bet.check_msg_ids)
 
-                # stickers for result (no ALWAYS_BADGE on loss as you requested)
+                # sticker + stats
                 if is_win:
                     state.wins += 1
                     state.streak_win += 1
                     state.streak_loss = 0
                     state.max_win_streak = max(state.max_win_streak, state.streak_win)
 
-                    # streak sticker if 2-10
-                    if state.streak_win in STICKERS["STREAK_WINS"]:
-                        await send_to_targets(context.bot, "send_sticker", STICKERS["STREAK_WINS"][state.streak_win])
+                    if random.random() < 0.55:
+                        await send_to_targets(context.bot, "send_sticker", random.choice(STICKERS["WIN_RANDOM"]))
                     else:
-                        # random win sticker sometimes
-                        if random.random() < 0.55:
-                            await send_to_targets(context.bot, "send_sticker", random.choice(STICKERS["WIN_RANDOM"]))
-                        else:
-                            await send_to_targets(context.bot, "send_sticker", STICKERS["WIN_ANY"])
+                        await send_to_targets(context.bot, "send_sticker", STICKERS["WIN_ANY"])
                 else:
                     state.losses += 1
                     state.streak_win = 0
@@ -530,15 +519,11 @@ async def engine_loop(context: ContextTypes.DEFAULT_TYPE):
                     state.max_loss_streak = max(state.max_loss_streak, state.streak_loss)
                     await send_to_targets(context.bot, "send_sticker", STICKERS["LOSS"])
 
-                # result message
-                res_text = format_result_msg(
-                    state.mode, latest_issue, latest_num, latest_type, pick, is_win,
-                    state.wins, state.losses, state.streak_loss, state.max_win_streak
-                )
+                # result msg
                 await send_to_targets(
                     context.bot,
                     "send_message",
-                    res_text,
+                    format_result_msg(state.mode, latest_issue, latest_num, latest_type, pick, is_win),
                     parse_mode=ParseMode.HTML,
                     disable_web_page_preview=True
                 )
@@ -546,36 +531,24 @@ async def engine_loop(context: ContextTypes.DEFAULT_TYPE):
                 state.last_period_processed = latest_issue
                 state.active_bet = None
 
-                # auto stop on step 8 (consolation + summary)
+                # auto stop at 8 step
                 if state.streak_loss >= 8:
                     await send_to_targets(context.bot, "send_message",
                                           "🧸 <b>8 Step Reached</b> — Cool down ✅\n<b>Auto Stop Activated.</b>",
                                           parse_mode=ParseMode.HTML)
-                    await stop_session(context, force=True)
+                    await stop_session(context)
                     break
 
-                # graceful stop requested: stop only after recovery (loss -> 0)
                 if state.graceful_stop_requested and state.streak_loss == 0:
-                    await stop_session(context, force=True)
+                    await stop_session(context)
                     break
 
-            # 2) Create next prediction ONLY if:
-            # - no active bet
-            # - not already processed next period
-            # - still running
+            # Create next prediction
             if (not state.running) or state.stop_event.is_set():
                 break
 
             if not state.active_bet:
-                # compute next issue
                 next_issue = str(int(latest_issue) + 1)
-
-                # prevent duplicates: if we already processed next_issue (rare), wait
-                if state.last_period_processed == next_issue:
-                    await asyncio.sleep(0.2)
-                    continue
-
-                # small buffer so we don't send too early
                 await asyncio.sleep(0.25 if state.mode == "30S" else 0.55)
 
                 if (not state.running) or state.stop_event.is_set():
@@ -584,10 +557,10 @@ async def engine_loop(context: ContextTypes.DEFAULT_TYPE):
                 pred = state.engine.get_pattern_signal(state.streak_loss)
                 conf = state.engine.confidence(state.streak_loss)
 
-                # ① prediction sticker
+                # prediction sticker
                 await send_to_targets(context.bot, "send_sticker", pred_sticker_for(state.mode, pred))
 
-                # optional color sticker (toggle)
+                # color sticker (if on)
                 if state.color_mode:
                     await send_to_targets(
                         context.bot,
@@ -595,27 +568,25 @@ async def engine_loop(context: ContextTypes.DEFAULT_TYPE):
                         STICKERS["COLOR_GREEN"] if pred == "BIG" else STICKERS["COLOR_RED"]
                     )
 
-                # ② prediction message (collect ids if needed later)
-                pred_text = format_prediction_msg(state.mode, next_issue, pred, conf, state.streak_loss)
-                pred_ids = await send_msg_collect_ids(
+                # prediction message
+                await send_to_targets(
                     context.bot,
-                    pred_text,
+                    "send_message",
+                    format_prediction_msg(state.mode, next_issue, pred, conf, state.streak_loss),
                     parse_mode=ParseMode.HTML,
                     disable_web_page_preview=True
                 )
 
-                # ③ checking message (collect ids so we can delete)
-                chk_text = format_checking_msg(state.mode, next_issue)
+                # checking message (store ids to delete)
                 chk_ids = await send_msg_collect_ids(
                     context.bot,
-                    chk_text,
+                    format_checking_msg(state.mode, next_issue),
                     parse_mode=ParseMode.HTML,
                     disable_web_page_preview=True
                 )
 
-                state.active_bet = ActiveBet(period=next_issue, pick=pred, pred_msg_ids=pred_ids, check_msg_ids=chk_ids)
+                state.active_bet = ActiveBet(period=next_issue, pick=pred, check_msg_ids=chk_ids)
 
-            # loop speed
             await asyncio.sleep(0.35 if state.mode == "30S" else 0.9)
 
         except asyncio.CancelledError:
@@ -626,36 +597,7 @@ async def engine_loop(context: ContextTypes.DEFAULT_TYPE):
     logging.info("Engine loop ended ✅")
 
 # ===========================
-# Session control (stop clean)
-# ===========================
-
-async def stop_session(context: ContextTypes.DEFAULT_TYPE, force: bool = False):
-    # stop flags
-    state.running = False
-    state.stop_event.set()
-    state.graceful_stop_requested = False
-
-    # summary + always badge at end (but not with loss-only constraint; you requested start/end always)
-    await send_to_targets(context.bot, "send_sticker", STICKERS["ALWAYS_BADGE"])
-    await send_to_targets(
-        context.bot,
-        "send_message",
-        format_summary(state.mode),
-        parse_mode=ParseMode.HTML,
-        disable_web_page_preview=True
-    )
-
-    # cancel engine task
-    if state.engine_task and (not state.engine_task.done()):
-        state.engine_task.cancel()
-        try:
-            await state.engine_task
-        except Exception:
-            pass
-    state.engine_task = None
-
-# ===========================
-# Premium Channel Selector UI
+# UI Panel
 # ===========================
 
 def selector_markup() -> InlineKeyboardMarkup:
@@ -666,9 +608,7 @@ def selector_markup() -> InlineKeyboardMarkup:
     rows = [
         [btn("MAIN GROUP", TARGETS["MAIN_GROUP"])],
         [btn("VIP", TARGETS["VIP"]), btn("PUBLIC", TARGETS["PUBLIC"])],
-        [
-            InlineKeyboardButton("🎨 Color: ON" if state.color_mode else "🎨 Color: OFF", callback_data="TOGGLE_COLOR"),
-        ],
+        [InlineKeyboardButton("🎨 Color: ON" if state.color_mode else "🎨 Color: OFF", callback_data="TOGGLE_COLOR")],
         [
             InlineKeyboardButton("⚡ Start 30 SEC", callback_data="START:30S"),
             InlineKeyboardButton("⚡ Start 1 MIN", callback_data="START:1M"),
@@ -680,60 +620,53 @@ def selector_markup() -> InlineKeyboardMarkup:
     ]
     return InlineKeyboardMarkup(rows)
 
-async def send_selector(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def send_selector(update: Update):
     txt = (
-        "🔐 <b>UNLOCKED</b>\n"
+        "🔐 <b>CONTROL PANEL</b>\n"
         "━━━━━━━━━━━━━━━━━━━━\n"
-        "✅ <b>Select Targets (Multi-Channel)</b>\n"
-        "• You can run on 1 / 2 / 3 chats together\n"
-        "• Toggle checkbox then Start\n"
-        "━━━━━━━━━━━━━━━━━━━━"
+        "✅ <b>Select Targets</b> (Run in 1/2/3 chats)\n"
+        "🎨 <b>Color Trade</b> toggle available\n"
+        "━━━━━━━━━━━━━━━━━━━━\n"
+        "👇 Select then Start"
     )
     await update.message.reply_text(txt, parse_mode=ParseMode.HTML, reply_markup=selector_markup())
 
 # ===========================
-# Auth flow
+# Auth
 # ===========================
 
 async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
-
     if uid in state.authorized_users:
-        await send_selector(update, context)
+        await send_selector(update)
         return
 
-    await update.message.reply_text(
-        "🔒 <b>LOCKED</b>\nEnter Password:",
-        parse_mode=ParseMode.HTML
-    )
+    await update.message.reply_text("🔒 <b>LOCKED</b>\nEnter Password:", parse_mode=ParseMode.HTML)
 
 async def cmd_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
     if uid not in state.authorized_users:
         await update.message.reply_text("🔒 Locked. Use /start", parse_mode=ParseMode.HTML)
         return
-    await send_selector(update, context)
+    await send_selector(update)
 
 async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
     msg = (update.message.text or "").strip()
 
-    # if not authorized -> treat msg as password
     if uid not in state.authorized_users:
         sheet_pw = await asyncio.to_thread(fetch_password_from_sheet)
-        # fallback: if sheet unavailable, you can hardcode temporary here if needed
         if sheet_pw and msg == sheet_pw:
             state.authorized_users.add(uid)
-            await send_selector(update, context)
+            await send_selector(update)
         else:
             await update.message.reply_text("❌ <b>Wrong Password</b>", parse_mode=ParseMode.HTML)
         return
 
-    # authorized but text message sent -> show panel shortcut
     await update.message.reply_text("⚙️ Open Panel: /panel", parse_mode=ParseMode.HTML)
 
 # ===========================
-# Callback buttons
+# Callback
 # ===========================
 
 async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -742,7 +675,10 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     uid = q.from_user.id
     if uid not in state.authorized_users:
-        await q.edit_message_text("🔒 Locked. Use /start")
+        try:
+            await q.edit_message_text("🔒 Locked. Use /start")
+        except Exception:
+            pass
         return
 
     data = q.data or ""
@@ -750,11 +686,11 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if data.startswith("TOGGLE:"):
         chat_id = int(data.split(":")[1])
         if chat_id in state.selected_targets:
-            # ensure at least one remains selected
             if len(state.selected_targets) > 1:
                 state.selected_targets.remove(chat_id)
         else:
             state.selected_targets.append(chat_id)
+
         try:
             await q.edit_message_reply_markup(reply_markup=selector_markup())
         except Exception:
@@ -772,7 +708,7 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if data.startswith("START:"):
         mode = data.split(":")[1]
 
-        # reset state stats & engine for fresh session
+        # reset session
         state.mode = mode
         state.engine = PredictionEngine()
         state.active_bet = None
@@ -789,7 +725,6 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         state.stop_event.clear()
         state.graceful_stop_requested = False
 
-        # cancel previous task clean
         if state.engine_task and (not state.engine_task.done()):
             state.engine_task.cancel()
             try:
@@ -801,7 +736,7 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         try:
             await q.edit_message_text(
-                f"✅ Started: <b>{mode_label(mode)}</b>\nTargets: <b>{len(state.selected_targets)}</b>",
+                f"✅ Started: <b>{mode_label(mode)}</b>\nTargets Selected: <b>{len(state.selected_targets)}</b>",
                 parse_mode=ParseMode.HTML,
                 reply_markup=selector_markup()
             )
@@ -819,19 +754,23 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         typ = data.split(":")[1]
         if typ == "GRACEFUL":
-            # if currently in loss recovery, keep running until streak_loss becomes 0 (next win)
             state.graceful_stop_requested = True
             try:
-                await q.edit_message_text("🧠 Graceful Stop armed ✅\nWill stop after recovery (loss -> 0).",
-                                          parse_mode=ParseMode.HTML,
-                                          reply_markup=selector_markup())
+                await q.edit_message_text(
+                    "🧠 Graceful Stop armed ✅\nWill stop after recovery (loss -> 0).",
+                    parse_mode=ParseMode.HTML,
+                    reply_markup=selector_markup()
+                )
             except Exception:
                 pass
             return
 
-        # FORCE stop now
-        await q.edit_message_text("🛑 Stopping now…", parse_mode=ParseMode.HTML)
-        await stop_session(context, force=True)
+        # FORCE
+        try:
+            await q.edit_message_text("🛑 Stopping now…", parse_mode=ParseMode.HTML)
+        except Exception:
+            pass
+        await stop_session(context)
         return
 
 # ===========================
@@ -840,20 +779,16 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 def main():
     logging.basicConfig(level=logging.INFO)
-
-    # Keep-alive
     keep_alive()
 
-    if BOT_TOKEN == "PASTE_TOKEN_HERE":
-        # Don't crash on Render; just log
-        logging.warning("BOT_TOKEN placeholder is set. Please set real token.")
     app_telegram = Application.builder().token(BOT_TOKEN).build()
 
     app_telegram.add_handler(CommandHandler("start", cmd_start))
     app_telegram.add_handler(CommandHandler("panel", cmd_panel))
+
     app_telegram.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
-    app_telegram.add_handler(MessageHandler(filters.COMMAND, handle_text))
-    app_telegram.add_handler(MessageHandler(filters.UpdateType.CALLBACK_QUERY, on_callback))
+    # ✅ Correct callback handler (Fix for your error)
+    app_telegram.add_handler(CallbackQueryHandler(on_callback))
 
     app_telegram.run_polling(close_loop=False)
 
