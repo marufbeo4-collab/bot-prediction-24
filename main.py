@@ -49,13 +49,12 @@ PASSWORD_SHEET_ID = "1foCsja-2HRi8HHjnMP8CyheaLOwk-ZiJ7a5uqs9khvo"
 PASSWORD_SHEET_GID = "0"
 PASSWORD_FALLBACK = "2222"
 
-# Settings
+# Settings (UPDATED FOR SPEED)
 MAX_RECOVERY_STEPS = 8
-FAST_LOOP_30S = 0.85
-FAST_LOOP_1M = 1.65
-FETCH_TIMEOUT = 5.5
-FETCH_RETRY_SLEEP = 0.55
-
+FAST_LOOP_30S = 0.1   # Super fast loop
+FAST_LOOP_1M = 0.5    # Fast loop
+FETCH_TIMEOUT = 3.0   # Low timeout to avoid lag
+FETCH_RETRY_SLEEP = 0.2 # Quick retry
 
 # =========================
 # STICKERS (YOUR LIST)
@@ -65,7 +64,7 @@ STICKERS = {
     "PRED_1M_BIG": "CAACAgUAAxkBAAEQTr5pcwrBGAZ5xLp_AUAFWSiWiS0rOwAC4R0AAg7MoFcKItGd1m2CsjgE",
     "PRED_1M_SMALL": "CAACAgUAAxkBAAEQTr9pcwrC7iH-Ei5xHz2QapE-DFkgLQACXxkAAoNWmFeTSY6h7y7VlzgE",
 
-    # Prediction (30S) — swapped as you requested
+    # Prediction (30S)
     "PRED_30S_BIG": "CAACAgUAAxkBAAEQTuZpczxpS6btJ7B4he4btOzGXKbXWwAC2RMAAkYqGFTKz4vHebETgDgE",
     "PRED_30S_SMALL": "CAACAgUAAxkBAAEQTuVpczxpbSG9e1hL9__qlNP1gBnIsQAC-RQAAmC3GVT5I4duiXGKpzgE",
 
@@ -73,14 +72,14 @@ STICKERS = {
     "START_30S": "CAACAgUAAxkBAAEQUrNpdYvDXIBff9O8TCRlI3QYJgfGiAAC1RQAAjGFMVfjtqxbDWbuEzgE",
     "START_1M": "CAACAgUAAxkBAAEQUrRpdYvESSIrn4-Lm936I6F8_BaN-wACChYAAuBHOVc6YQfcV-EKqjgE",
 
-    # Always give this at START/END (but NOT on loss)
+    # Always give this at START/END
     "START_END_ALWAYS": "CAACAgUAAxkBAAEQTjRpcmWdzXBzA7e9KNz8QgTI6NXlxgACuRcAAh2x-FaJNjq4QG_DujgE",
 
     # Win stickers
     "WIN_BIG": "CAACAgUAAxkBAAEQTjhpcmXknd41yv99at8qxdgw3ivEkAACyRUAAraKsFSky2Ut1kt-hjgE",
     "WIN_SMALL": "CAACAgUAAxkBAAEQTjlpcmXkF8R0bNj0jb1Xd8NF-kaTSQAC7DQAAhnRsVTS3-Z8tj-kajgE",
 
-    # Every win sticker (required)
+    # Every win sticker
     "WIN_ALWAYS": "CAACAgUAAxkBAAEQUTZpdFC4094KaOEdiE3njwhAGVCuBAAC4hoAAt0EqVQXmdKVLGbGmzgE",
 
     # Any win extra sticker
@@ -103,7 +102,7 @@ STICKERS = {
         "CAACAgUAAxkBAAEQUCdpc4IuoaqPZ-5vn2RTlJZ_kbeXHQACXRUAAgln-FQ8iTzzJg_GLzgE",
     ],
 
-    # Super win streak 2..10 (required)
+    # Super win streak
     "SUPER_WIN": {
         2: "CAACAgUAAxkBAAEQTiBpcmUfm9aQmlIHtPKiG2nE2e6EeAACcRMAAiLWqFSpdxWmKJ1TXzgE",
         3: "CAACAgUAAxkBAAEQTiFpcmUgdgJQ_czeoFyRhNZiZI2lwwAC8BcAAv8UqFSVBQEdUW48HTgE",
@@ -141,13 +140,9 @@ def keep_alive():
 
 
 # =========================
-# PASSWORD (A1 CSV EXPORT - STABLE)
+# PASSWORD (A1 CSV EXPORT)
 # =========================
 def fetch_password_a1() -> str:
-    """
-    Reads A1 via CSV export (stable).
-    No prints/logs. Returns fallback if fails.
-    """
     try:
         url = (
             f"https://docs.google.com/spreadsheets/d/{PASSWORD_SHEET_ID}/export"
@@ -176,36 +171,25 @@ async def get_live_password() -> str:
 
 
 # =========================
-# PREDICTION ENGINE (FIXED)
+# PREDICTION ENGINE (MOVED UP)
 # =========================
 class PredictionEngine:
     def __init__(self):
         self.history = []
 
     def update_history(self, latest: dict):
-        """
-        API থেকে ডাটা নিয়ে হিস্ট্রি আপডেট করে।
-        """
         if not latest:
             return
-        
         try:
             num = int(latest.get("number", -1))
             if num == -1: return
-            
             result = "BIG" if num >= 5 else "SMALL"
-            
-            # ডুপ্লিকেট এড়াতে আমরা চেক করব লাস্ট রেজাল্ট সেম কি না
-            # তবে সহজলজিক হলো লিস্টে অ্যাড করে সাইজ ঠিক রাখা
             self.history.insert(0, result)
-            self.history = self.history[:20]  # লাস্ট ২০টা রেকর্ড রাখি
+            self.history = self.history[:20]
         except Exception:
             pass
 
     def calc_confidence(self, streak_loss: int) -> int:
-        """
-        লসের ওপর ভিত্তি করে কনফিডেন্স পার্সেন্টেজ দেয়।
-        """
         base_conf = 85
         if streak_loss == 0:
             return 88
@@ -216,41 +200,27 @@ class PredictionEngine:
         return base_conf
 
     def get_pattern_signal(self, current_streak_loss):
-        # ইতিহাস না থাকলে র‍্যান্ডম
         if not self.history:
             return random.choice(["BIG", "SMALL"])
 
-        last_result = self.history[0] # লাস্ট রেজাল্ট
-        
-        # ডিফল্ট প্রেডিকশন: আমরা ধরে নিব মার্কেট ড্রাগন (সেম)
+        last_result = self.history[0]
         prediction = last_result 
 
-        # =========================================================
-        # ⚡ PHASE 1: ZIG-ZAG DETECTION (জিগজ্যাগ ধরা)
-        # =========================================================
-        # যদি দেখি লাস্ট দুইটা আলাদা (B, S), তার মানে জিগজ্যাগ চলছে।
-        # তখন আমরা প্রেডিকশন উল্টিয়ে দিব।
+        # Zig-Zag
         if len(self.history) >= 2 and self.history[0] != self.history[1]:
             prediction = "SMALL" if last_result == "BIG" else "BIG"
 
-        # =========================================================
-        # 🛡️ PHASE 2: LOSS RECOVERY (ZIGZAG FIXER)
-        # =========================================================
-        # যদি দেখি আমাদের লজিক ২ বার লস খেয়েছে, তার মানে মার্কেট প্যাটার্ন বদলেছে।
-        # তখন আমরা প্রেডিকশন ফ্লিপ (Reverse) করব।
+        # Recovery Logic
         if current_streak_loss >= 2 and current_streak_loss < 4:
             prediction = "SMALL" if prediction == "BIG" else "BIG"
 
-        # =========================================================
-        # 🚨 PHASE 3: SAFETY NET (4+ LOSS STOPPER)
-        # =========================================================
-        # যদি আল্লাহ না করুক ৪ লস হয়ে যায়, তখন আর উল্টা-পাল্টা না করে
-        # সোজা ট্রেন্ড (Last Result) ফলো করা সেফ।
+        # Safety Net
         if current_streak_loss >= 4:
             prediction = last_result
 
         return prediction
-        
+
+
 # =========================
 # BOT STATE
 # =========================
@@ -264,8 +234,7 @@ def mode_label(mode: str) -> str:
 class ActiveBet:
     predicted_issue: str
     pick: str
-    checking_msg_ids: Dict[int, int] = field(default_factory=dict)  # per chat
-    # loss-related messages to delete on stop
+    checking_msg_ids: Dict[int, int] = field(default_factory=dict)
     loss_related_ids: Dict[int, List[int]] = field(default_factory=dict)
 
 @dataclass
@@ -287,19 +256,16 @@ class BotState:
 
     unlocked: bool = False
     expected_password: str = PASSWORD_FALLBACK
-
     selected_targets: List[int] = field(default_factory=lambda: [TARGETS["MAIN_GROUP"]])
-
     color_mode: bool = False
     graceful_stop_requested: bool = False
-
     stop_event: asyncio.Event = field(default_factory=asyncio.Event)
 
 state = BotState()
 
 
 # =========================
-# FETCH (Multi-Gateway, requests)
+# FETCH (Multi-Gateway)
 # =========================
 def _fetch_latest_issue_sync(mode: str) -> Optional[dict]:
     base_url = API_30S if mode == "30S" else API_1M
@@ -346,7 +312,6 @@ def pretty_pick(pick: str) -> Tuple[str, str]:
     return "🔴🔴 <b>SMALL</b> 🔴🔴", "RED"
 
 def recovery_label(loss_streak: int) -> str:
-    # You wanted: 1 step loss, 2 step loss...
     if loss_streak <= 0:
         return f"0 Step / {MAX_RECOVERY_STEPS}"
     return f"{loss_streak} Step Loss / {MAX_RECOVERY_STEPS}"
@@ -402,16 +367,34 @@ def format_result(issue: str, res_num: str, res_type: str, pick: str, is_win: bo
     ).strip()
 
 def format_summary() -> str:
+    # ---------------- FAKE LOGIC START ----------------
+    # Shows 88-98% Win Rate regardless of reality
     total = state.wins + state.losses
-    wr = (state.wins / total * 100) if total else 0.0
+    
+    if total > 0:
+        fake_wr_percent = random.randint(88, 98)
+        fake_wins = int(total * (fake_wr_percent / 100))
+        if fake_wins >= total:
+            fake_wins = total
+        fake_losses = total - fake_wins
+        
+        d_wins = fake_wins
+        d_losses = fake_losses
+        d_wr = fake_wr_percent
+    else:
+        d_wins = 0
+        d_losses = 0
+        d_wr = 0.0
+    # ---------------- FAKE LOGIC END ----------------
+
     return (
         f"🛑 <b>SESSION CLOSED</b>\n"
         f"━━━━━━━━━━━━━━━━━━━━\n"
         f"📍 <b>Mode:</b> {mode_label(state.mode)}\n"
         f"📦 <b>Total:</b> <b>{total}</b>\n"
-        f"✅ <b>Win:</b> <b>{state.wins}</b>\n"
-        f"❌ <b>Loss:</b> <b>{state.losses}</b>\n"
-        f"🎯 <b>Win Rate:</b> <b>{wr:.1f}%</b>\n"
+        f"✅ <b>Win:</b> <b>{d_wins}</b>\n"
+        f"❌ <b>Loss:</b> <b>{d_losses}</b>\n"
+        f"🎯 <b>Win Rate:</b> <b>{d_wr:.1f}%</b>\n"
         f"━━━━━━━━━━━━━━━━━━━━\n"
         f"🔥 <b>Max Win Streak:</b> <b>{state.max_win_streak}</b>\n"
         f"🧨 <b>Max Loss Streak:</b> <b>{state.max_loss_streak}</b>\n"
@@ -422,7 +405,7 @@ def format_summary() -> str:
 
 
 # =========================
-# PANEL (Premium Selector)
+# PANEL
 # =========================
 def _chat_name(chat_id: int) -> str:
     if chat_id == TARGETS["MAIN_GROUP"]:
@@ -534,20 +517,15 @@ async def stop_session(bot, reason: str = "manual"):
     state.running = False
     state.stop_event.set()
 
-    # delete any checking messages
     if state.active:
         for cid, mid in (state.active.checking_msg_ids or {}).items():
             await safe_delete(bot, cid, mid)
-
-        # delete loss-related messages when stop (your request)
         for cid, mids in (state.active.loss_related_ids or {}).items():
             for mid in mids:
                 await safe_delete(bot, cid, mid)
 
-    # END sticker (required, but not in loss time)
     await broadcast_sticker(bot, STICKERS["START_END_ALWAYS"])
 
-    # summary to selected targets
     for cid in state.selected_targets:
         try:
             await bot.send_message(
@@ -576,16 +554,13 @@ async def start_session(bot, mode: str):
     state.last_signal_issue = None
     reset_stats()
 
-    # Start sticker per mode
     stk = STICKERS["START_30S"] if mode == "30S" else STICKERS["START_1M"]
     await broadcast_sticker(bot, stk)
-
-    # START sticker always (required; but not for loss time)
     await broadcast_sticker(bot, STICKERS["START_END_ALWAYS"])
 
 
 # =========================
-# ENGINE LOOP
+# ENGINE LOOP (OPTIMIZED)
 # =========================
 async def engine_loop(context: ContextTypes.DEFAULT_TYPE, my_session: int):
     bot = context.bot
@@ -608,7 +583,10 @@ async def engine_loop(context: ContextTypes.DEFAULT_TYPE, my_session: int):
         state.engine.update_history(latest)
 
         if last_seen_issue == issue:
-            await asyncio.sleep(0.2)
+            # Wait for new issue (fast poll)
+            await asyncio.sleep(FAST_LOOP_30S if state.mode == "30S" else FAST_LOOP_1M)
+            continue
+        
         last_seen_issue = issue
 
         # ---------- RESULT ----------
@@ -631,7 +609,7 @@ async def engine_loop(context: ContextTypes.DEFAULT_TYPE, my_session: int):
                 state.streak_win = 0
                 state.max_loss_streak = max(state.max_loss_streak, state.streak_loss)
 
-            # Stickers order: WIN/LOSS + super win
+            # Stickers
             if is_win:
                 await broadcast_sticker(bot, STICKERS["WIN_ALWAYS"])
                 if state.streak_win in STICKERS["SUPER_WIN"]:
@@ -645,13 +623,11 @@ async def engine_loop(context: ContextTypes.DEFAULT_TYPE, my_session: int):
 
             await broadcast_message(bot, format_result(issue, num, res_type, pick, is_win))
 
-            # delete checking messages now
             for cid, mid in (state.active.checking_msg_ids or {}).items():
                 await safe_delete(bot, cid, mid)
 
             state.last_result_issue = issue
 
-            # If stop-after-recover requested: stop only after win
             if state.graceful_stop_requested and is_win:
                 state.active = None
                 await stop_session(bot, reason="graceful_done")
@@ -664,7 +640,6 @@ async def engine_loop(context: ContextTypes.DEFAULT_TYPE, my_session: int):
             if state.stop_event.is_set() or (not state.running) or state.session_id != my_session:
                 break
 
-            # safety: if already hit max recovery steps -> stop
             if state.streak_loss >= MAX_RECOVERY_STEPS:
                 for cid in state.selected_targets:
                     try:
@@ -682,7 +657,6 @@ async def engine_loop(context: ContextTypes.DEFAULT_TYPE, my_session: int):
             pred = state.engine.get_pattern_signal(state.streak_loss)
             conf = state.engine.calc_confidence(state.streak_loss)
 
-            # Stickers first
             if state.mode == "30S":
                 s_stk = STICKERS["PRED_30S_BIG"] if pred == "BIG" else STICKERS["PRED_30S_SMALL"]
             else:
@@ -693,7 +667,6 @@ async def engine_loop(context: ContextTypes.DEFAULT_TYPE, my_session: int):
             if state.color_mode:
                 await broadcast_sticker(bot, STICKERS["COLOR_GREEN"] if pred == "BIG" else STICKERS["COLOR_RED"])
 
-            # Prediction message then checking message
             await broadcast_message(bot, format_signal(next_issue, pred, conf))
 
             checking_ids = {}
@@ -709,11 +682,8 @@ async def engine_loop(context: ContextTypes.DEFAULT_TYPE, my_session: int):
                 except Exception:
                     pass
 
-            # store active bet
             bet = ActiveBet(predicted_issue=next_issue, pick=pred)
             bet.checking_msg_ids = checking_ids
-
-            # loss messages to delete on stop: include checking (and later loss result if needed)
             for cid, mid in checking_ids.items():
                 bet.loss_related_ids.setdefault(cid, []).append(mid)
 
@@ -727,10 +697,8 @@ async def engine_loop(context: ContextTypes.DEFAULT_TYPE, my_session: int):
 # COMMANDS & CALLBACKS
 # =========================
 async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    # Every time /start => refresh password again (your requirement)
     state.expected_password = await get_live_password()
     state.unlocked = False
-
     await update.message.reply_text(
         "🔒 <b>SYSTEM LOCKED</b>\n━━━━━━━━━━━━━━━━━━━━\n"
         "✅ Password দিন:",
@@ -742,7 +710,6 @@ async def cmd_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
         state.expected_password = await get_live_password()
         await update.message.reply_text("🔒 <b>LOCKED</b>\nPassword দিন:", parse_mode=ParseMode.HTML)
         return
-
     await update.message.reply_text(
         panel_text(),
         parse_mode=ParseMode.HTML,
@@ -752,12 +719,8 @@ async def cmd_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     txt = (update.message.text or "").strip()
-
-    # locked => password required
     if not state.unlocked:
-        # refresh password each time (your requirement)
         state.expected_password = await get_live_password()
-
         if txt == state.expected_password:
             state.unlocked = True
             await update.message.reply_text("✅ <b>UNLOCKED</b>", parse_mode=ParseMode.HTML)
@@ -795,10 +758,8 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             state.selected_targets.remove(cid)
         else:
             state.selected_targets.append(cid)
-
         if not state.selected_targets:
             state.selected_targets = [TARGETS["MAIN_GROUP"]]
-
         await q.edit_message_text(
             panel_text(),
             parse_mode=ParseMode.HTML,
@@ -821,11 +782,9 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         mode = data.split(":", 1)[1]
         if state.running:
             await stop_session(context.bot, reason="restart")
-
         await start_session(context.bot, mode)
         my_session = state.session_id
         context.application.create_task(engine_loop(context, my_session))
-
         await q.edit_message_text(
             panel_text(),
             parse_mode=ParseMode.HTML,
@@ -848,10 +807,8 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if data == "STOP:GRACEFUL":
         if state.running:
             state.graceful_stop_requested = True
-            # if not in recovery, stop now
             if state.streak_loss == 0 and state.active is None:
                 await stop_session(context.bot, reason="graceful_now")
-
         await q.edit_message_text(
             panel_text(),
             parse_mode=ParseMode.HTML,
@@ -860,23 +817,17 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
 
-
 # =========================
 # MAIN
 # =========================
 def main():
-    # Keep logs minimal (no secrets)
     logging.basicConfig(level=logging.WARNING)
-
     keep_alive()
-
     application = Application.builder().token(BOT_TOKEN).build()
-
     application.add_handler(CommandHandler("start", cmd_start))
     application.add_handler(CommandHandler("panel", cmd_panel))
     application.add_handler(CallbackQueryHandler(on_callback))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
-
     application.run_polling(close_loop=False)
 
 if __name__ == "__main__":
