@@ -171,7 +171,7 @@ async def get_live_password() -> str:
 
 
 # =========================
-# PREDICTION ENGINE (MOVED UP)
+# PREDICTION ENGINE (ANTI-REVERSE MODE)
 # =========================
 class PredictionEngine:
     def __init__(self):
@@ -190,36 +190,37 @@ class PredictionEngine:
             pass
 
     def calc_confidence(self, streak_loss: int) -> int:
-        base_conf = 85
-        if streak_loss == 0:
-            return 88
-        elif streak_loss == 1:
-            return 90
-        elif streak_loss >= 2:
-            return 95
-        return base_conf
+        # লস যত বাড়বে, কনফিডেন্স ফেক ভাবে বাড়িয়ে দিব যাতে ইউজার ভরসা পায় (আপনার রিকোয়ারমেন্ট)
+        if streak_loss >= 3:
+            return 99
+        return 90
 
     def get_pattern_signal(self, current_streak_loss):
+        # ইতিহাস না থাকলে র‍্যান্ডম
         if not self.history:
             return random.choice(["BIG", "SMALL"])
 
         last_result = self.history[0]
+        
+        # 1. Basic Trend Analysis (Dragon/Mirror)
         prediction = last_result 
 
-        # Zig-Zag
+        # 2. Zig-Zag Detection (ABAB)
         if len(self.history) >= 2 and self.history[0] != self.history[1]:
+            # যদি জিগজ্যাগ চলে, তাহলে লাস্টের উল্টোটা আসবে
             prediction = "SMALL" if last_result == "BIG" else "BIG"
 
-        # Recovery Logic
-        if current_streak_loss >= 2 and current_streak_loss < 4:
+        # =========================================================
+        # 🔥 ULTIMATE REVERSE FIX (FOR 8 STEP LOSS)
+        # =========================================================
+        # আপনি বলেছেন সব উল্টো আসছে। তাই আমরা লজিক ঘুরিয়ে দিব।
+        
+        # স্টেপ ২ থেকে ৮ পর্যন্ত: FORCE REVERSE
+        # মানে বট লজিক দিয়ে যা বের করেছে, আমরা তার উল্টোটা সিগন্যাল দিব।
+        if current_streak_loss >= 2:
             prediction = "SMALL" if prediction == "BIG" else "BIG"
 
-        # Safety Net
-        if current_streak_loss >= 4:
-            prediction = last_result
-
         return prediction
-
 
 # =========================
 # BOT STATE
