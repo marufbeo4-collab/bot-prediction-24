@@ -178,137 +178,41 @@ async def get_live_password() -> str:
 # =========================
 # PREDICTION ENGINE (FIXED)
 # =========================
-class PredictionEngine:
-    def __init__(self):
-        self.history: List[str] = []
-        self.raw_history: List[dict] = []
-        self.last_prediction: Optional[str] = None
-
-    def update_history(self, issue_data: dict):
-        try:
-            number = int(issue_data["number"])
-            result_type = "BIG" if number >= 5 else "SMALL"
-        except Exception:
-            return
-
-        if (not self.raw_history) or (self.raw_history[0].get("issueNumber") != issue_data.get("issueNumber")):
-            self.history.insert(0, result_type)
-            self.raw_history.insert(0, issue_data)
-            self.history = self.history[:120]
-            self.raw_history = self.raw_history[:120]
-
-    def calc_confidence(self, streak_loss):
-        # সাধারণ কনফিডেন্স লজিক
-        base_conf = random.randint(90, 95)
-        if streak_loss == 0:
-            return base_conf + random.randint(1, 4)
-        else:
-            return base_conf - random.randint(1, 5)
-
-    def get_pattern_signal(self, current_streak_loss):
-        # ইতিহাস খুব ছোট হলে সেফটি র‍্যান্ডম
-        if len(self.history) < 15:
+def get_pattern_signal(self, current_streak_loss):
+        # ইতিহাস না থাকলে র‍্যান্ডম
+        if not self.history:
             return random.choice(["BIG", "SMALL"])
 
-        h = self.history # শর্টকাট
-        votes = [] # ভোটের বাক্স
-
-        # =========================================================
-        # 🗳️ PART 1: TREND & PATTERN LOGICS
-        # =========================================================
+        last_result = self.history[0] # লাস্ট রেজাল্ট
         
-        # 1. Trend Majority (গত ১২ পিরিয়ডে কে বেশি?)
-        last_12 = h[:12]
-        if last_12.count("BIG") > last_12.count("SMALL"): votes.append("BIG")
-        else: votes.append("SMALL")
-
-        # 2. Dragon Follower (লাস্ট রেজাল্ট কপি)
-        votes.append(h[0])
-
-        # 3. Streak Hunter (যদি টানা ৩টা একই থাকে)
-        if h[0] == h[1] == h[2]: votes.append(h[0])
-
-        # 4. Pattern AABB (2-2 Pattern)
-        if h[0] == h[1] and h[2] == h[3] and h[1] != h[2]:
-            votes.append("SMALL" if h[0] == "BIG" else "BIG")
+        # ডিফল্ট প্রেডিকশন: আমরা ধরে নিব মার্কেট ড্রাগন (সেম)
+        prediction = last_result 
 
         # =========================================================
-        # ⚡ NEW: ZIGZAG BOOSTER (আপনার সমস্যার সমাধান)
+        # ⚡ PHASE 1: ZIG-ZAG DETECTION (জিগজ্যাগ ধরা)
         # =========================================================
-        # যদি দেখি লাস্ট দুইটা রেজাল্ট আলাদা (যেমন: B, S), তার মানে জিগজ্যাগ চলছে।
-        # তখন আমরা "উল্টা" ভোটের পাওয়ার বাড়িয়ে দিব।
-        if h[0] != h[1]:
-            zigzag_vote = "SMALL" if h[0] == "BIG" else "BIG"
-            votes.append(zigzag_vote)
-            votes.append(zigzag_vote) # জিগজ্যাগ ডিটেক্ট হলে ডাবল ভোট
-            votes.append(zigzag_vote) # ট্রিপল ভোট যাতে ড্রাগন লজিককে হারানো যায়
+        # যদি দেখি লাস্ট দুইটা আলাদা (B, S), তার মানে জিগজ্যাগ চলছে।
+        # তখন আমরা প্রেডিকশন উল্টিয়ে দিব।
+        if len(self.history) >= 2 and self.history[0] != self.history[1]:
+            prediction = "SMALL" if last_result == "BIG" else "BIG"
 
         # =========================================================
-        # 🧮 PART 2: MATHEMATICAL LOGICS
+        # 🛡️ PHASE 2: LOSS RECOVERY (ZIGZAG FIXER)
         # =========================================================
-        try:
-            r_num = int(self.raw_history[0].get('number', 0))
-            p_digit = int(str(self.raw_history[0].get('issueNumber', 0))[-1])
-            prev_num = int(self.raw_history[1].get('number', 0))
-
-            # 5. Period + Number
-            votes.append("SMALL" if (p_digit + r_num) % 2 == 0 else "BIG")
-            # 6. Last 2 Numbers Sum
-            votes.append("SMALL" if (r_num + prev_num) % 2 == 0 else "BIG")
-            # 7. Number Direction
-            votes.append("BIG" if r_num >= 5 else "SMALL")
-        except: pass
+        # আপনার আগের কোডে এই পার্টটা কাজ করত না। এখন করবে।
+        # যদি দেখি আমাদের লজিক ২ বার লস খেয়েছে, তার মানে মার্কেট প্যাটার্ন বদলেছে।
+        # তখন আমরা প্রেডিকশন ফ্লিপ (Reverse) করব।
+        if current_streak_loss >= 2 and current_streak_loss < 4:
+            prediction = "SMALL" if prediction == "BIG" else "BIG"
 
         # =========================================================
-        # 📜 PART 3: HISTORY MATCHING
+        # 🚨 PHASE 3: SAFETY NET (4+ LOSS STOPPER)
         # =========================================================
-        # বর্তমানে যে ৩টা রেজাল্ট আছে, অতীতে এমন হলে কী আসত?
-        current_pat = h[:3]
-        match_big, match_small = 0, 0
-        for i in range(1, len(h) - 3):
-            if h[i:i+3] == current_pat:
-                if h[i-1] == "BIG": match_big += 1
-                else: match_small += 1
-        
-        if match_big > match_small: votes.append("BIG")
-        elif match_small > match_big: votes.append("SMALL")
-
-        # =========================================================
-        # 🧠 PART 4: LOSS RECOVERY & VOTING
-        # =========================================================
-
-        # লস রিকভারি (টানা লস হলে উল্টা ভোটের জোর বাড়বে)
-        if current_streak_loss >= 2:
-            rec_vote = "SMALL" if self.last_prediction == "BIG" else "BIG"
-            votes.append(rec_vote)
-            votes.append(rec_vote)
-
-        # সব লজিকের ভোট গণনা
-        big_votes = votes.count("BIG")
-        small_votes = votes.count("SMALL")
-
-        if big_votes > small_votes:
-            prediction = "BIG"
-        elif small_votes > big_votes:
-            prediction = "SMALL"
-        else:
-            prediction = h[0]
-
-        # =========================================================
-        # 🛡️ EMERGENCY OVERRIDE (SMART FIX)
-        # =========================================================
-        # আগে এখানে শুধু h[0] ছিল, তাই জিগজ্যাগে ধরা খেত।
-        # এখন আমরা চেক করব: মার্কেট কি জিগজ্যাগ নাকি ড্রাগন?
-        
+        # যদি আল্লাহ না করুক ৪ লস হয়ে যায়, তখন আর উল্টা-পাল্টা না করে
+        # সোজা ট্রেন্ড (Last Result) ফলো করা সেফ।
         if current_streak_loss >= 4:
-            # যদি এখন জিগজ্যাগ চলে (লাস্ট ২টা আলাদা), তবে উল্টা ধরো
-            if h[0] != h[1]:
-                prediction = "SMALL" if h[0] == "BIG" else "BIG"
-            # আর যদি ড্রাগন চলে (লাস্ট ২টা এক), তবে সোজা ধরো
-            else:
-                prediction = h[0]
+            prediction = last_result
 
-        self.last_prediction = prediction
         return prediction
         
 # =========================
